@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   createIssue,
+  deleteIssue,
   transitionIssueStatus,
   getAllIssues,
   getIssueById,
@@ -220,6 +221,54 @@ describe('issue-store', () => {
       const statusChange = activities.find((a) => a.type === 'status_changed');
       expect(statusChange).toBeDefined();
       expect(statusChange!.metadata).toEqual({ from: '이슈 등록', to: '해결 중' });
+    });
+  });
+
+  describe('deleteIssue', () => {
+    it('생성한 이슈를 삭제하면 목록과 상세 조회에서 제거된다', () => {
+      const issue = createIssue({
+        title: '삭제 테스트',
+        description: '삭제 테스트 내용',
+        project: 'Wiki',
+        priority: '차차 수정 필요',
+        reporter_id: 'user-minjoo',
+      });
+
+      expect(getIssueById(issue.id)).not.toBeNull();
+
+      deleteIssue(issue.id);
+
+      expect(getIssueById(issue.id)).toBeNull();
+      expect(getAllIssues().some((item) => item.id === issue.id)).toBe(false);
+      expect(getActivitiesForIssue(issue.id)).toEqual([]);
+    });
+
+    it('seed 이슈도 삭제 후 다시 병합 목록에 나타나지 않는다', () => {
+      expect(getIssueById('ISSUE-003')).not.toBeNull();
+
+      deleteIssue('ISSUE-003');
+
+      expect(getIssueById('ISSUE-003')).toBeNull();
+      expect(getAllIssues().some((item) => item.id === 'ISSUE-003')).toBe(false);
+      expect(getActivitiesForIssue('ISSUE-003')).toEqual([]);
+    });
+
+    it('삭제한 이슈 번호는 새 이슈 생성 시 재사용하지 않는다', () => {
+      deleteIssue('ISSUE-004');
+
+      const issue = createIssue({
+        title: '번호 재사용 방지',
+        description: '삭제된 이슈 번호는 재사용하지 않습니다.',
+        project: 'Admin',
+        priority: '개선 사항',
+        reporter_id: 'user-minjoo',
+      });
+
+      expect(issue.id).toBe('ISSUE-005');
+    });
+
+    it('없는 이슈를 삭제하면 에러를 던진다', () => {
+      expect(() => deleteIssue('ISSUE-999')).toThrow('이슈를 찾을 수 없습니다.');
     });
   });
 

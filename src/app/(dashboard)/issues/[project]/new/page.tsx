@@ -3,24 +3,20 @@
 import { use, useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Upload, X, Film, ImageIcon } from 'lucide-react';
+import { ArrowLeft, Upload, X, Film } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/lib/auth-context';
 import { createIssue } from '@/lib/issue-store';
 import { seedProfiles } from '@/data/seed-profiles';
-import type { IssuePriority, IssueProject } from '@/types';
+import { issueProjectMap } from '@/data/issue-projects';
+import { getIssuePriorityLabel } from '@/lib/issue-labels';
+import type { IssuePriority } from '@/types';
 
 const MAX_ATTACHMENTS = 4;
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50MB
 const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
-
-const projectMap: Record<string, IssueProject> = {
-  admin: 'Admin',
-  healthcare: 'Healthcare',
-  dashboard: 'Dashboard',
-};
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
@@ -37,7 +33,7 @@ interface AttachmentFile {
 
 export default function NewProjectIssuePage({ params }: { params: Promise<{ project: string }> }) {
   const { project: projectSlug } = use(params);
-  const projectName = projectMap[projectSlug];
+  const projectName = issueProjectMap[projectSlug];
   const router = useRouter();
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,14 +51,6 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
   const activeProfiles = seedProfiles.filter((p) => p.status === 'active');
 
   const totalSize = attachments.reduce((sum, a) => sum + a.size, 0);
-
-  if (!projectName) {
-    return (
-      <div className="mx-auto max-w-2xl py-20 text-center">
-        <p className="text-text-muted">프로젝트를 찾을 수 없습니다.</p>
-      </div>
-    );
-  }
 
   const validateAndAddFiles = useCallback((files: File[]) => {
     setError(null);
@@ -186,6 +174,7 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
 
   const handleSubmit = async () => {
     if (!user) return;
+    if (!projectName) return;
     if (!title.trim()) {
       setError('이슈 제목을 입력해주세요.');
       return;
@@ -236,6 +225,14 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
     }
   };
 
+  if (!projectName) {
+    return (
+      <div className="mx-auto max-w-2xl py-20 text-center">
+        <p className="text-text-muted">프로젝트를 찾을 수 없습니다.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
@@ -253,15 +250,15 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
       <div className="space-y-5 rounded-2xl border border-border bg-surface p-6">
         {/* Priority */}
         <div className="space-y-1.5">
-          <label className="text-[13px] font-medium text-text-primary">중요도</label>
+          <label className="text-[13px] font-medium text-text-primary">Priority</label>
           <select
             value={priority}
             onChange={(e) => setPriority(e.target.value as IssuePriority)}
             className="w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-sm text-text-primary outline-none focus:border-curi-pink"
           >
-            <option value="즉시 수정 필요">즉시 수정 필요</option>
-            <option value="차차 수정 필요">차차 수정 필요</option>
-            <option value="개선 사항">개선 사항</option>
+            <option value="즉시 수정 필요">{getIssuePriorityLabel('즉시 수정 필요')}</option>
+            <option value="차차 수정 필요">{getIssuePriorityLabel('차차 수정 필요')}</option>
+            <option value="개선 사항">{getIssuePriorityLabel('개선 사항')}</option>
           </select>
         </div>
 

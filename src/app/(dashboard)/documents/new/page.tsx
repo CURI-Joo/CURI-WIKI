@@ -7,6 +7,7 @@ import { seedCategories } from '@/data/seed-categories';
 import { seedProfiles } from '@/data/seed-profiles';
 import { DocumentAccessSelector } from '@/components/documents/document-access-selector';
 import { createStoredDocument } from '@/lib/document-store';
+import { getDocumentStatusLabel, getExternalStatusLabel } from '@/lib/document-labels';
 import { ArrowLeft, Save, Eye } from 'lucide-react';
 import Link from 'next/link';
 import type { DocStatus, Visibility, ExternalStatus } from '@/types';
@@ -104,9 +105,9 @@ export default function NewDocumentPage() {
             onChange={(e) => setStatus(e.target.value as DocStatus)}
             className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none focus:border-curi-pink/50"
           >
-            <option value="Draft">Draft</option>
-            <option value="Published">Published</option>
-            <option value="Archived">Archived</option>
+            <option value="Draft">{getDocumentStatusLabel('Draft')}</option>
+            <option value="Published">{getDocumentStatusLabel('Published')}</option>
+            <option value="Archived">{getDocumentStatusLabel('Archived')}</option>
           </select>
         </div>
         <div>
@@ -131,9 +132,9 @@ export default function NewDocumentPage() {
             onChange={(e) => setExternalStatus(e.target.value as ExternalStatus)}
             className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none focus:border-curi-pink/50"
           >
-            <option value="INTERNAL_ONLY">Internal Only</option>
-            <option value="REVIEW_REQUIRED">Review Required</option>
-            <option value="EXTERNAL_OK">External OK</option>
+            <option value="INTERNAL_ONLY">{getExternalStatusLabel('INTERNAL_ONLY')}</option>
+            <option value="REVIEW_REQUIRED">{getExternalStatusLabel('REVIEW_REQUIRED')}</option>
+            <option value="EXTERNAL_OK">{getExternalStatusLabel('EXTERNAL_OK')}</option>
           </select>
         </div>
       </div>

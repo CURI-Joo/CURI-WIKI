@@ -1,6 +1,7 @@
 'use client';
 
 import { Input } from '@/components/ui/input';
+import { getIssuePriorityLabel } from '@/lib/issue-labels';
 import type { IssueStatus, IssuePriority } from '@/types';
 import { Search } from 'lucide-react';
 
@@ -20,11 +21,13 @@ function FilterSelect<T extends string>({
   label,
   value,
   options,
+  getOptionLabel,
   onChange,
 }: {
   label: string;
   value: T;
   options: T[];
+  getOptionLabel?: (value: T) => string;
   onChange: (v: T) => void;
 }) {
   return (
@@ -36,11 +39,15 @@ function FilterSelect<T extends string>({
     >
       {options.map((opt) => (
         <option key={opt} value={opt}>
-          {opt === 'all' ? `${label} 전체` : opt}
+          {getOptionLabel ? getOptionLabel(opt) : opt === 'all' ? `${label} 전체` : opt}
         </option>
       ))}
     </select>
   );
+}
+
+function getPriorityOptionLabel(priority: IssuePriority | 'all') {
+  return priority === 'all' ? 'All Priority' : getIssuePriorityLabel(priority);
 }
 
 export function IssueFilters({
@@ -54,7 +61,13 @@ export function IssueFilters({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <FilterSelect label="상태" value={status} options={statuses} onChange={onStatusChange} />
-      <FilterSelect label="중요도" value={priority} options={priorities} onChange={onPriorityChange} />
+      <FilterSelect
+        label="Priority"
+        value={priority}
+        options={priorities}
+        getOptionLabel={getPriorityOptionLabel}
+        onChange={onPriorityChange}
+      />
       <div className="relative flex-1 min-w-[200px]">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
         <Input

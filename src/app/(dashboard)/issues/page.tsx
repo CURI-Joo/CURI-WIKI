@@ -3,13 +3,7 @@
 import Link from 'next/link';
 import { Folder } from 'lucide-react';
 import { useIssueStore } from '@/lib/issue-store';
-import type { IssueProject } from '@/types';
-
-const projects: { name: IssueProject; slug: string; description: string }[] = [
-  { name: 'Admin', slug: 'admin', description: 'Admin 서비스 관련 이슈 관리' },
-  { name: 'Healthcare', slug: 'healthcare', description: 'Healthcare 서비스 관련 이슈 관리' },
-  { name: 'Dashboard', slug: 'dashboard', description: 'Dashboard 관련 이슈 관리' },
-];
+import { issueProjects } from '@/data/issue-projects';
 
 export default function IssuesPage() {
   const { issues } = useIssueStore();
@@ -19,7 +13,7 @@ export default function IssuesPage() {
       <h1 className="text-xl font-bold text-text-primary">Issue Projects</h1>
 
       <div className="space-y-3">
-        {projects.map((project) => {
+        {issueProjects.map((project) => {
           const projectIssues = issues.filter((i) => i.project === project.name);
           const unresolvedCount = projectIssues.filter((i) => i.status !== '이슈 해결').length;
 

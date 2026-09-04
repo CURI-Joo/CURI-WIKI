@@ -11,3 +11,7 @@ export function canViewIssues(user: Pick<Profile, 'status'>): boolean {
 export function canTransitionIssue(user: Pick<Profile, 'status'>): boolean {
   return user.status === 'active';
 }
+
+export function canDeleteIssue(user: Pick<Profile, 'status'>): boolean {
+  return user.status === 'active';
+}

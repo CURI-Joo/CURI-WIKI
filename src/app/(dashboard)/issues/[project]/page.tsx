@@ -8,17 +8,12 @@ import { useIssueStore } from '@/lib/issue-store';
 import { IssueSummaryCards } from '@/components/issues/issue-summary-cards';
 import { IssueFilters } from '@/components/issues/issue-filters';
 import { IssueListItem } from '@/components/issues/issue-list-item';
-import type { IssueStatus, IssuePriority, IssueProject } from '@/types';
-
-const projectMap: Record<string, IssueProject> = {
-  admin: 'Admin',
-  healthcare: 'Healthcare',
-  dashboard: 'Dashboard',
-};
+import { issueProjectMap } from '@/data/issue-projects';
+import type { IssueStatus, IssuePriority } from '@/types';
 
 export default function ProjectIssuesPage({ params }: { params: Promise<{ project: string }> }) {
   const { project: projectSlug } = use(params);
-  const projectName = projectMap[projectSlug];
+  const projectName = issueProjectMap[projectSlug];
   const { issues } = useIssueStore();
   const [status, setStatus] = useState<IssueStatus | 'all'>('all');
   const [priority, setPriority] = useState<IssuePriority | 'all'>('all');
@@ -86,7 +81,7 @@ export default function ProjectIssuesPage({ params }: { params: Promise<{ projec
       {/* Header */}
       <div className="hidden md:flex items-center gap-3 px-4 text-[11px] font-medium text-text-muted uppercase tracking-wider">
         <span className="w-[80px]">ID</span>
-        <span className="w-[90px]">중요도</span>
+        <span className="w-[90px]">Priority</span>
         <span className="flex-1">이슈 제목</span>
         <span className="w-[70px]">상태</span>
         <span className="w-[60px] text-right">담당자</span>

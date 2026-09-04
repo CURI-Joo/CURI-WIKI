@@ -6,6 +6,7 @@ import { seedProfiles } from '@/data/seed-profiles';
 import { seedCategories } from '@/data/seed-categories';
 import { seedDocumentTags, seedTags } from '@/data/seed-tags';
 import { useDocumentStore } from '@/lib/document-store';
+import { getDocumentStatusLabel, getExternalStatusLabel } from '@/lib/document-labels';
 import { canReadDocument } from '@/lib/permissions';
 import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
@@ -94,13 +95,11 @@ export default function DocumentDetailPage() {
     URL.revokeObjectURL(url);
   };
 
-  const externalStatusLabel: Record<string, { text: string; color: string }> = {
-    INTERNAL_ONLY: { text: 'Internal Only', color: 'text-text-muted bg-text-muted/10' },
-    REVIEW_REQUIRED: { text: 'Review Required', color: 'text-warning bg-warning/10' },
-    EXTERNAL_OK: { text: 'External OK', color: 'text-success bg-success/10' },
+  const externalStatusStyle: Record<string, string> = {
+    INTERNAL_ONLY: 'text-text-muted bg-text-muted/10',
+    REVIEW_REQUIRED: 'text-warning bg-warning/10',
+    EXTERNAL_OK: 'text-success bg-success/10',
   };
-
-  const extStatus = externalStatusLabel[doc.external_status];
 
   return (
     <div className="max-w-6xl mx-auto flex gap-8">
@@ -141,10 +140,10 @@ export default function DocumentDetailPage() {
               doc.status === 'Draft' ? 'bg-warning/10 text-warning' :
               'bg-text-muted/10 text-text-muted'
             }`}>
-              {doc.status}
+              {getDocumentStatusLabel(doc.status)}
             </span>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${extStatus.color}`}>
-              {extStatus.text}
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${externalStatusStyle[doc.external_status]}`}>
+              {getExternalStatusLabel(doc.external_status)}
             </span>
           </div>
           <h1 className="text-2xl font-bold text-text-primary">{doc.title}</h1>
@@ -190,7 +189,7 @@ export default function DocumentDetailPage() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-curi-pink hover:bg-curi-pink-hover text-white text-sm font-medium transition-colors"
           >
             <Edit3 className="w-3.5 h-3.5" />
-            편집
+            내용 수정
           </Link>
           <button
             onClick={handleExport}

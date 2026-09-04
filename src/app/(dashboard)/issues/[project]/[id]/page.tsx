@@ -2,12 +2,13 @@
 
 import { use } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Film } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Film, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth-context';
-import { useIssueStore, transitionIssueStatus } from '@/lib/issue-store';
-import { canTransitionIssue } from '@/lib/issue-permissions';
+import { useIssueStore, transitionIssueStatus, deleteIssue } from '@/lib/issue-store';
+import { canDeleteIssue, canTransitionIssue } from '@/lib/issue-permissions';
 import { IssueStatusBadge } from '@/components/issues/issue-status-badge';
 import { IssuePriorityBadge } from '@/components/issues/issue-priority-badge';
 import { IssueActionButtons } from '@/components/issues/issue-action-buttons';
@@ -24,6 +25,7 @@ export default function ProjectIssueDetailPage({
   const { project: projectSlug, id } = use(params);
   const { user } = useAuth();
   const { issues, activities } = useIssueStore();
+  const router = useRouter();
 
   const issue = issues.find((i) => i.id === id);
   const issueActivities = activities
@@ -55,6 +57,19 @@ export default function ProjectIssueDetailPage({
     }
   };
 
+  const handleDelete = () => {
+    if (!user) return;
+    const confirmed = window.confirm(`${issue.id} 이슈를 삭제할까요? 삭제 후에는 목록에서 보이지 않습니다.`);
+    if (!confirmed) return;
+
+    try {
+      deleteIssue(issue.id);
+      router.push(`/issues/${projectSlug}`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '이슈 삭제에 실패했습니다.');
+    }
+  };
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       {/* Header */}
@@ -73,10 +88,22 @@ export default function ProjectIssueDetailPage({
       {/* Issue Card */}
       <div className="rounded-2xl border border-border bg-surface p-6 space-y-5">
         {/* Badges */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{issue.project}</Badge>
-          <IssuePriorityBadge priority={issue.priority} />
-          <IssueStatusBadge status={issue.status} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">{issue.project}</Badge>
+            <IssuePriorityBadge priority={issue.priority} />
+            <IssueStatusBadge status={issue.status} />
+          </div>
+          {user && canDeleteIssue(user) && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-error/15 bg-error/5 px-2.5 text-xs font-medium text-error transition-colors hover:bg-error/10"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              삭제
+            </button>
+          )}
         </div>
 
         {/* Title & Description */}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canCreateIssue, canViewIssues, canTransitionIssue } from '@/lib/issue-permissions';
+import { canCreateIssue, canViewIssues, canTransitionIssue, canDeleteIssue } from '@/lib/issue-permissions';
 
 describe('issue-permissions', () => {
   describe('canCreateIssue', () => {
@@ -33,6 +33,16 @@ describe('issue-permissions', () => {
 
     it('inactive 유저는 상태를 변경할 수 없다', () => {
       expect(canTransitionIssue({ status: 'inactive' })).toBe(false);
+    });
+  });
+
+  describe('canDeleteIssue', () => {
+    it('active 유저는 이슈를 삭제할 수 있다', () => {
+      expect(canDeleteIssue({ status: 'active' })).toBe(true);
+    });
+
+    it('inactive 유저는 이슈를 삭제할 수 없다', () => {
+      expect(canDeleteIssue({ status: 'inactive' })).toBe(false);
     });
   });
 });

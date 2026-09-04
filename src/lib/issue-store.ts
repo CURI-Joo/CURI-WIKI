@@ -7,6 +7,7 @@ import { dispatchIssueEvent, buildIssueUrl } from '@/lib/issue-events';
 
 const ISSUES_KEY = 'curi-wiki-issues-v1';
 const ACTIVITIES_KEY = 'curi-wiki-issue-activities-v1';
+const DELETED_ISSUE_IDS_KEY = 'curi-wiki-deleted-issue-ids-v1';
 const STORE_EVENT = 'curi-wiki-issue-store-change';
 
 const VALID_TRANSITIONS: Record<IssueStatus, IssueStatus[]> = {
@@ -77,33 +78,54 @@ function writeCustomActivities(activities: IssueActivity[]) {
   writeJson(ACTIVITIES_KEY, activities);
 }
 
+function getDeletedIssueIds(): string[] {
+  return readJson<string[]>(DELETED_ISSUE_IDS_KEY, []);
+}
+
+function writeDeletedIssueIds(issueIds: string[]) {
+  writeJson(DELETED_ISSUE_IDS_KEY, Array.from(new Set(issueIds)));
+}
+
 function getMergedIssues(): Issue[] {
+  const deletedIssueIds = new Set(getDeletedIssueIds());
   const byId = new Map<string, Issue>();
   for (const issue of seedIssues) {
+    if (deletedIssueIds.has(issue.id)) continue;
     byId.set(issue.id, issue);
   }
   for (const issue of getCustomIssues()) {
+    if (deletedIssueIds.has(issue.id)) continue;
     byId.set(issue.id, issue);
   }
   return Array.from(byId.values());
 }
 
 function getMergedActivities(): IssueActivity[] {
+  const deletedIssueIds = new Set(getDeletedIssueIds());
   const byId = new Map<string, IssueActivity>();
   for (const activity of seedIssueActivities) {
+    if (deletedIssueIds.has(activity.issue_id)) continue;
     byId.set(activity.id, activity);
   }
   for (const activity of getCustomActivities()) {
+    if (deletedIssueIds.has(activity.issue_id)) continue;
     byId.set(activity.id, activity);
   }
   return Array.from(byId.values());
 }
 
 function getNextIssueNumber(): number {
-  const issues = getMergedIssues();
+  const issues = [...seedIssues, ...getCustomIssues()];
   let maxNum = 0;
   for (const issue of issues) {
     const match = issue.id.match(/^ISSUE-(\d+)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  for (const issueId of getDeletedIssueIds()) {
+    const match = issueId.match(/^ISSUE-(\d+)$/);
     if (match) {
       const num = parseInt(match[1], 10);
       if (num > maxNum) maxNum = num;
@@ -252,6 +274,23 @@ export function transitionIssueStatus(
   return updated;
 }
 
+export function deleteIssue(issueId: string): Issue {
+  const issue = getMergedIssues().find((item) => item.id === issueId);
+
+  if (!issue) {
+    throw new Error('이슈를 찾을 수 없습니다.');
+  }
+
+  writeDeletedIssueIds([...getDeletedIssueIds(), issueId]);
+  writeCustomIssues(getCustomIssues().filter((item) => item.id !== issueId));
+  writeCustomActivities(
+    getCustomActivities().filter((activity) => activity.issue_id !== issueId)
+  );
+  emitStoreChange();
+
+  return issue;
+}
+
 export function useIssueStore() {
   const [state, setState] = useState<IssueStoreState>(() =>
     getIssueStoreState()
@@ -260,7 +299,13 @@ export function useIssueStore() {
   useEffect(() => {
     const sync = () => setState(getIssueStoreState());
     const handleStorage = (event: StorageEvent) => {
-      if (event.key === ISSUES_KEY || event.key === ACTIVITIES_KEY) sync();
+      if (
+        event.key === ISSUES_KEY ||
+        event.key === ACTIVITIES_KEY ||
+        event.key === DELETED_ISSUE_IDS_KEY
+      ) {
+        sync();
+      }
     };
 
     window.addEventListener(STORE_EVENT, sync);

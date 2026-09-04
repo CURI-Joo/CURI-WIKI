@@ -10,6 +10,7 @@ import {
   User,
 } from 'lucide-react';
 import type { Category, Document, Profile } from '@/types';
+import { getDocumentStatusLabel } from '@/lib/document-labels';
 import { cn, formatRelativeDate } from '@/lib/utils';
 
 interface DocumentAlbumGridProps {
@@ -105,7 +106,7 @@ export function DocumentAlbumGrid({
                       getStatusClass(doc.status)
                     )}
                   >
-                    {doc.status}
+                    {getDocumentStatusLabel(doc.status)}
                   </span>
                   <span className="flex min-w-0 items-center gap-1 text-xs text-text-muted">
                     <FileText className="h-3.5 w-3.5 shrink-0" />

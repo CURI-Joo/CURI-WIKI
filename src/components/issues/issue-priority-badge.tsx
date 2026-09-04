@@ -1,6 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
+import { getIssuePriorityLabel } from '@/lib/issue-labels';
 import type { IssuePriority } from '@/types';
 
 const priorityConfig: Record<IssuePriority, { variant: 'error' | 'warning' | 'default' }> = {
@@ -11,5 +12,5 @@ const priorityConfig: Record<IssuePriority, { variant: 'error' | 'warning' | 'de
 
 export function IssuePriorityBadge({ priority }: { priority: IssuePriority }) {
   const config = priorityConfig[priority];
-  return <Badge variant={config.variant}>{priority}</Badge>;
+  return <Badge variant={config.variant}>{getIssuePriorityLabel(priority)}</Badge>;
 }

@@ -10,18 +10,32 @@ import {
   MessageSquare,
   MoreHorizontal,
   AlertCircle,
+  ShieldCheck,
+  HeartPulse,
+  LayoutDashboard,
+  BookOpenText,
   LogOut,
   Menu,
   X,
   ChevronDown,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { getInitials } from '@/lib/utils';
+import { issueProjects } from '@/data/issue-projects';
+
+const issueProjectIcons: Record<string, LucideIcon> = {
+  admin: ShieldCheck,
+  healthcare: HeartPulse,
+  dashboard: LayoutDashboard,
+  wiki: BookOpenText,
+};
 
 export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [homeOpen, setHomeOpen] = useState(true);
+  const [issueOpen, setIssueOpen] = useState(true);
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
@@ -41,11 +55,22 @@ export function Sidebar() {
 
   const isHomeActive = pathname === '/home' || pathname === '/' || pathname.startsWith('/documents') || pathname.startsWith('/category/');
   const isIssueActive = pathname.startsWith('/issues');
+  const isIssueRootActive = pathname === '/issues';
 
   // Auto-expand HOME when navigating to its children
   useEffect(() => {
-    if (isHomeActive) setHomeOpen(true);
+    const timer = window.setTimeout(() => {
+      if (isHomeActive) setHomeOpen(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [isHomeActive]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (isIssueActive) setIssueOpen(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isIssueActive]);
 
   const subCategories = [
     { label: 'CURI AI', icon: Bot, href: '/category/curi-ai' },
@@ -128,19 +153,55 @@ export function Sidebar() {
           {/* Spacer */}
           <div className="h-1" />
 
-          {/* ISSUE - top-level */}
-          <Link
-            href="/issues"
-            className={cn(
-              'flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors',
-              isIssueActive
-                ? 'bg-curi-pink-soft text-text-primary'
-                : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+          {/* ISSUE section */}
+          <div>
+            <div className="flex items-center">
+              <Link
+                href="/issues"
+                className={cn(
+                  'flex flex-1 items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors',
+                  isIssueRootActive
+                    ? 'bg-curi-pink-soft text-text-primary'
+                    : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+                )}
+              >
+                <AlertCircle className={cn('h-4 w-4', isIssueActive ? 'text-curi-pink' : 'text-text-muted')} />
+                ISSUE
+              </Link>
+              <button
+                onClick={() => setIssueOpen(!issueOpen)}
+                className="rounded-md p-1 text-text-muted hover:bg-surface-elevated hover:text-text-primary transition-colors"
+                aria-label={issueOpen ? 'ISSUE 하위 메뉴 접기' : 'ISSUE 하위 메뉴 펼치기'}
+              >
+                <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', issueOpen ? '' : '-rotate-90')} />
+              </button>
+            </div>
+
+            {issueOpen && (
+              <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-2">
+                {issueProjects.map((item) => {
+                  const Icon = issueProjectIcons[item.slug];
+                  const href = `/issues/${item.slug}`;
+                  const active = pathname === href || pathname.startsWith(href + '/');
+                  return (
+                    <Link
+                      key={item.slug}
+                      href={href}
+                      className={cn(
+                        'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors',
+                        active
+                          ? 'bg-curi-pink-soft text-text-primary'
+                          : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+                      )}
+                    >
+                      <Icon className={cn('h-3.5 w-3.5', active ? 'text-curi-pink' : 'text-text-muted')} />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </div>
             )}
-          >
-            <AlertCircle className={cn('h-4 w-4', isIssueActive ? 'text-curi-pink' : 'text-text-muted')} />
-            ISSUE
-          </Link>
+          </div>
         </div>
       </nav>
 

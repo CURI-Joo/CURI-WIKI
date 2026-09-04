@@ -15,9 +15,9 @@ export function IssueSummaryCards({ issues }: IssueSummaryCardsProps) {
   };
 
   const cards = [
-    { label: '이슈 등록', count: counts['이슈 등록'], color: 'text-blue-600 bg-blue-500/8' },
-    { label: '해결 중', count: counts['해결 중'], color: 'text-amber-600 bg-amber-500/8' },
-    { label: '이슈 해결', count: counts['이슈 해결'], color: 'text-emerald-600 bg-emerald-500/8' },
+    { label: '이슈 등록', count: counts['이슈 등록'] },
+    { label: '해결 중', count: counts['해결 중'] },
+    { label: '이슈 해결', count: counts['이슈 해결'] },
   ];
 
   return (
@@ -26,8 +26,7 @@ export function IssueSummaryCards({ issues }: IssueSummaryCardsProps) {
         <div
           key={card.label}
           className={cn(
-            'rounded-xl px-4 py-3',
-            card.color
+            'rounded-xl border border-curi-pink/10 bg-curi-pink/8 px-4 py-3 text-curi-pink'
           )}
         >
           <p className="text-xs font-medium opacity-80">{card.label}</p>

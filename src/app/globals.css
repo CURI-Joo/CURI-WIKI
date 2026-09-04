@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+:root {
+  --curi-pink: #D42872;
+  --curi-pink-hover: #BF2366;
+  --curi-pink-soft: rgba(212, 40, 114, 0.08);
+
+  --background: #FFFFFF;
+  --foreground: #111118;
+  --surface: #F5F5F7;
+  --surface-elevated: #EEEEF0;
+  --border: #D9D9DE;
+  --text-primary: #111118;
+  --text-secondary: #5C5D66;
+  --text-muted: #9496A1;
+
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --info: #3B82F6;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-border: var(--border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-curi-pink: var(--curi-pink);
+  --color-curi-pink-hover: var(--curi-pink-hover);
+  --color-curi-pink-soft: var(--curi-pink-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
+  --font-sans: "Pretendard", "Inter", system-ui, -apple-system, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Pretendard", "Inter", system-ui, -apple-system, "Noto Sans KR", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--curi-pink);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Selection */
+::selection {
+  background: var(--curi-pink-soft);
+  color: var(--foreground);
+}

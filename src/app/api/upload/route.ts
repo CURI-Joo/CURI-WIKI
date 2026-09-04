@@ -14,15 +14,21 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const issueId = formData.get('issue_id') as string | null;
+    const documentId = formData.get('document_id') as string | null;
 
     if (!file) {
       return NextResponse.json({ error: '파일이 필요합니다.' }, { status: 400 });
     }
 
+    const markdownUrl = file.type.startsWith('image/')
+      ? `data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString('base64')}`
+      : null;
+
     return NextResponse.json({
       attachment: {
         id: `demo-attachment-${Date.now()}`,
         issue_id: issueId,
+        document_id: documentId,
         storage_key: `demo/${file.name}`,
         file_name: file.name,
         mime_type: file.type,
@@ -30,6 +36,7 @@ export async function POST(request: NextRequest) {
         uploaded_by: 'user-minjoo',
         created_at: new Date().toISOString(),
       },
+      markdown_url: markdownUrl,
     });
   }
 
@@ -54,6 +61,7 @@ export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file = formData.get('file') as File | null;
   const issueId = formData.get('issue_id') as string | null;
+  const documentId = formData.get('document_id') as string | null;
 
   if (!file) {
     return NextResponse.json({ error: '파일이 필요합니다.' }, { status: 400 });
@@ -103,6 +111,7 @@ export async function POST(request: NextRequest) {
     .from('attachments')
     .insert({
       issue_id: issueId || null,
+      document_id: documentId || null,
       storage_key: storageKey,
       file_name: file.name,
       mime_type: file.type,
@@ -121,5 +130,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ attachment });
+  return NextResponse.json({
+    attachment,
+    markdown_url: file.type.startsWith('image/') ? `/api/upload/${attachment.id}/file` : null,
+  });
 }

@@ -1,16 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { seedCategories } from '@/data/seed-categories';
 import { createStoredDocument } from '@/lib/document-store';
+import { MarkdownImageUploadButton } from '@/components/documents/markdown-image-upload-button';
+import { MarkdownRenderer } from '@/components/documents/markdown-renderer';
 import { ArrowLeft, Save, Eye } from 'lucide-react';
 import Link from 'next/link';
 
 export default function NewDocumentPage() {
   const { profile } = useAuth();
   const router = useRouter();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
@@ -89,35 +92,48 @@ export default function NewDocumentPage() {
       </div>
 
       {/* Editor toggle */}
-      <div className="flex items-center gap-2 border-b border-border pb-2">
-        <button
-          onClick={() => setShowPreview(false)}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            !showPreview ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'
-          }`}
-        >
-          Markdown
-        </button>
-        <button
-          onClick={() => setShowPreview(true)}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            showPreview ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'
-          }`}
-        >
-          <Eye className="w-3.5 h-3.5" />
-          미리보기
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowPreview(false)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              !showPreview ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            Markdown
+          </button>
+          <button
+            onClick={() => setShowPreview(true)}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              showPreview ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5" />
+            미리보기
+          </button>
+        </div>
+        {!showPreview && (
+          <MarkdownImageUploadButton
+            textareaRef={textareaRef}
+            content={content}
+            onContentChange={setContent}
+            disabled={saving}
+          />
+        )}
       </div>
 
       {/* Editor */}
       {showPreview ? (
         <div className="rounded-xl border border-border bg-surface p-6 min-h-[400px]">
-          <div className="text-sm text-text-primary whitespace-pre-wrap">
-            {content || '내용을 입력하면 미리보기가 표시됩니다.'}
-          </div>
+          {content ? (
+            <MarkdownRenderer content={content} />
+          ) : (
+            <p className="text-sm text-text-muted">내용을 입력하면 미리보기가 표시됩니다.</p>
+          )}
         </div>
       ) : (
         <textarea
+          ref={textareaRef}
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Markdown으로 글을 작성하세요..."

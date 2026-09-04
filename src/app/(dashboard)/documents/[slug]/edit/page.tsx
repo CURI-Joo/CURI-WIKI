@@ -4,7 +4,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { seedCategories } from '@/data/seed-categories';
 import { updateStoredDocument, useDocumentStore } from '@/lib/document-store';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { MarkdownImageUploadButton } from '@/components/documents/markdown-image-upload-button';
+import { MarkdownRenderer } from '@/components/documents/markdown-renderer';
 import { ArrowLeft, Save, Eye } from 'lucide-react';
 import Link from 'next/link';
 import type { Document } from '@/types';
@@ -43,6 +45,7 @@ function EditForm({
   userId: string;
 }) {
   const router = useRouter();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [title, setTitle] = useState(doc.title);
   const [summary, setSummary] = useState(doc.summary);
   const [categoryId, setCategoryId] = useState(doc.category_id);
@@ -99,21 +102,37 @@ function EditForm({
         </select>
       </div>
 
-      <div className="flex items-center gap-2 border-b border-border pb-2">
-        <button onClick={() => setShowPreview(false)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!showPreview ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>
-          Markdown
-        </button>
-        <button onClick={() => setShowPreview(true)} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${showPreview ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>
-          <Eye className="w-3.5 h-3.5" />미리보기
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowPreview(false)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!showPreview ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>
+            Markdown
+          </button>
+          <button onClick={() => setShowPreview(true)} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${showPreview ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>
+            <Eye className="w-3.5 h-3.5" />미리보기
+          </button>
+        </div>
+        {!showPreview && (
+          <MarkdownImageUploadButton
+            textareaRef={textareaRef}
+            content={content}
+            onContentChange={setContent}
+            documentId={doc.id}
+            disabled={saving}
+          />
+        )}
       </div>
 
       {showPreview ? (
-        <div className="rounded-xl border border-border bg-surface p-6 min-h-[400px] text-sm text-text-primary whitespace-pre-wrap">
-          {content}
+        <div className="rounded-xl border border-border bg-surface p-6 min-h-[400px]">
+          {content ? (
+            <MarkdownRenderer content={content} />
+          ) : (
+            <p className="text-sm text-text-muted">내용을 입력하면 미리보기가 표시됩니다.</p>
+          )}
         </div>
       ) : (
         <textarea
+          ref={textareaRef}
           value={content}
           onChange={(e) => setContent(e.target.value)}
           className="w-full min-h-[400px] p-4 rounded-xl border border-border bg-surface text-sm text-text-primary font-mono resize-y focus:outline-none focus:border-curi-pink/50"

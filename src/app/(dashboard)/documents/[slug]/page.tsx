@@ -1,16 +1,19 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { seedCategories } from '@/data/seed-categories';
 import { useDocumentStore } from '@/lib/document-store';
+import { useProfiles, getProfileName } from '@/lib/profiles-store';
 import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
 import {
   ArrowLeft,
   Calendar,
-  Download,
+  Check,
   Edit3,
+  Link2,
   User,
 } from 'lucide-react';
 
@@ -18,7 +21,17 @@ export default function DocumentDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const { profile } = useAuth();
   const { documents, loading } = useDocumentStore();
-  const router = useRouter();
+  const profiles = useProfiles();
+  const [linkCopied, setLinkCopied] = useState(false);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
 
   if (!profile) return null;
 
@@ -55,14 +68,23 @@ export default function DocumentDetailPage() {
       return { level, text, id: text.toLowerCase().replace(/\s+/g, '-') };
     });
 
-  const handleExport = () => {
-    const blob = new Blob([doc.content_markdown], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${doc.slug}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleCopyLink = async () => {
+    const url = `${window.location.origin}/documents/${doc.slug}`;
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
+
+      copiedTimeoutRef.current = setTimeout(() => {
+        setLinkCopied(false);
+      }, 1800);
+    } catch {
+      window.prompt('아래 링크를 복사해 공유하세요.', url);
+    }
   };
 
   return (
@@ -99,7 +121,7 @@ export default function DocumentDetailPage() {
           <div className="flex flex-wrap items-center gap-4 mt-4 text-xs text-text-muted">
             <span className="flex items-center gap-1">
               <User className="w-3 h-3" />
-              {doc.owner_id}
+              {getProfileName(profiles, doc.owner_id)}
             </span>
             <span className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
@@ -118,11 +140,17 @@ export default function DocumentDetailPage() {
             내용 수정
           </Link>
           <button
-            onClick={handleExport}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border hover:bg-surface-elevated text-text-secondary text-sm transition-colors"
+            type="button"
+            onClick={handleCopyLink}
+            aria-label={linkCopied ? '링크가 복사되었습니다' : '링크 복사'}
+            title={linkCopied ? '링크가 복사되었습니다' : '링크 복사'}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary"
           >
-            <Download className="w-3.5 h-3.5" />
-            Markdown 내보내기
+            {linkCopied ? (
+              <Check className="h-4 w-4 text-success" />
+            ) : (
+              <Link2 className="h-4 w-4" />
+            )}
           </button>
         </div>
 

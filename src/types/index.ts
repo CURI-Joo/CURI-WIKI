@@ -183,7 +183,7 @@ export interface SearchResult {
 }
 
 // ─── Issue Tracking ─────────────────────────────────────
-export type IssueProject = 'Admin' | 'Healthcare' | 'Dashboard' | 'Wiki';
+export type IssueProject = 'Admin' | 'Healthcare' | 'Dashboard' | 'Wiki' | 'WAME';
 export type IssueStatus = '이슈 등록' | '해결 중' | '이슈 해결';
 export type IssuePriority = '즉시 수정 필요' | '차차 수정 필요' | '개선 사항';
 export type IssueActivityType = 'created' | 'status_changed';

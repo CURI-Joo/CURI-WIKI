@@ -2,14 +2,14 @@
 
 import { use, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Plus, ArrowLeft } from 'lucide-react';
+import { Plus, ArrowLeft, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIssueStore } from '@/lib/issue-store';
 import { useProfiles } from '@/lib/profiles-store';
 import { IssueSummaryCards } from '@/components/issues/issue-summary-cards';
 import { IssueFilters } from '@/components/issues/issue-filters';
 import { IssueListItem } from '@/components/issues/issue-list-item';
-import { issueProjectMap } from '@/data/issue-projects';
+import { issueProjectMap, issueProjects } from '@/data/issue-projects';
 import type { IssueStatus, IssuePriority } from '@/types';
 
 export default function ProjectIssuesPage({ params }: { params: Promise<{ project: string }> }) {
@@ -70,12 +70,27 @@ export default function ProjectIssuesPage({ params }: { params: Promise<{ projec
             <h1 className="text-xl font-bold text-text-primary">{projectName}</h1>
           </div>
         </div>
-        <Link href={`/issues/${projectSlug}/new`}>
-          <Button size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            New Issue
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {(() => {
+            const project = issueProjects.find((p) => p.slug === projectSlug);
+            if (!project?.serviceUrl) return null;
+            return (
+              <a href={project.serviceUrl} target="_blank" rel="noopener noreferrer">
+                <Button size="sm" variant="outline" className="gap-1.5 border-curi-pink text-curi-pink hover:bg-curi-pink/5">
+                  <ExternalLink className="h-4 w-4" />
+                  <span className="hidden sm:inline">서비스 바로가기</span>
+                  <span className="sm:hidden">바로가기</span>
+                </Button>
+              </a>
+            );
+          })()}
+          <Link href={`/issues/${projectSlug}/new`}>
+            <Button size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              New Issue
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <IssueSummaryCards issues={projectIssues} />

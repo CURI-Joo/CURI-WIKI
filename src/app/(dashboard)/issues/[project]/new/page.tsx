@@ -209,24 +209,28 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
         }
       }
 
-      // Telegram notification (fire-and-forget)
+      // Telegram notification
       if (assigneeId) {
         const assignee = profiles.find((p) => p.id === assigneeId);
-        fetch('/api/telegram', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            issue_id: issue.id,
-            project: projectName,
-            title: issue.title,
-            priority: issue.priority,
-            assignee_name: assignee?.name ?? assigneeId,
-            assignee_id: assigneeId,
-            reporter_name: profile.name,
-            status: issue.status,
-            issue_url: `/issues/${projectSlug}/${issue.id}`,
-          }),
-        }).catch((err) => console.warn('[Telegram] notification failed:', err));
+        try {
+          await fetch('/api/telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              issue_id: issue.id,
+              project: projectName,
+              title: issue.title,
+              priority: issue.priority,
+              assignee_name: assignee?.name ?? assigneeId,
+              assignee_id: assigneeId,
+              reporter_name: profile.name,
+              status: issue.status,
+              issue_url: `/issues/${projectSlug}/${issue.id}`,
+            }),
+          });
+        } catch (err) {
+          console.warn('[Telegram] notification failed:', err);
+        }
       }
 
       router.push(`/issues/${projectSlug}/${issue.id}`);

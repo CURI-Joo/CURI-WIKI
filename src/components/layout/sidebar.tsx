@@ -31,6 +31,7 @@ const issueProjectIcons: Record<string, LucideIcon> = {
   healthcare: HeartPulse,
   dashboard: LayoutDashboard,
   wiki: BookOpenText,
+  wame: MessageSquare,
 };
 
 export function Sidebar() {

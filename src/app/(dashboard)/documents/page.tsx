@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { seedCategories } from '@/data/seed-categories';
 import { DocumentAlbumGrid } from '@/components/documents/document-album-grid';
 import { useDocumentStore } from '@/lib/document-store';
+import { useProfiles } from '@/lib/profiles-store';
 import Link from 'next/link';
 import { useState, Suspense } from 'react';
 import { FileText, Plus, Search } from 'lucide-react';
@@ -12,6 +13,7 @@ import { FileText, Plus, Search } from 'lucide-react';
 function DocumentsContent() {
   const { profile } = useAuth();
   const { documents, loading } = useDocumentStore();
+  const profiles = useProfiles();
   const searchParams = useSearchParams();
   const categorySlug = searchParams.get('category');
   const [search, setSearch] = useState('');
@@ -87,7 +89,7 @@ function DocumentsContent() {
         <DocumentAlbumGrid
           documents={docs}
           categories={seedCategories}
-          profiles={[]}
+          profiles={profiles}
         />
       )}
     </div>

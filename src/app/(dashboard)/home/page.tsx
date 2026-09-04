@@ -6,10 +6,12 @@ import { DocumentAlbumGrid } from '@/components/documents/document-album-grid';
 import { seedCategories } from '@/data/seed-categories';
 import { useAuth } from '@/lib/auth-context';
 import { useDocumentStore } from '@/lib/document-store';
+import { useProfiles } from '@/lib/profiles-store';
 
 export default function HomePage() {
   const { profile } = useAuth();
   const { documents, loading } = useDocumentStore();
+  const profiles = useProfiles();
   if (!profile) return null;
 
   if (loading) {
@@ -52,7 +54,7 @@ export default function HomePage() {
         <DocumentAlbumGrid
           documents={docs}
           categories={seedCategories}
-          profiles={[]}
+          profiles={profiles}
         />
       )}
     </div>

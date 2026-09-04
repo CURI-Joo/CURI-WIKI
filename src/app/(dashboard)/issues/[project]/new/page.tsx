@@ -213,8 +213,9 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
       if (assigneeId) {
         const assignee = profiles.find((p) => p.id === assigneeId);
         try {
-          await fetch('/api/telegram', {
+          const tgRes = await fetch('/api/telegram', {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               issue_id: issue.id,
@@ -228,6 +229,8 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
               issue_url: `/issues/${projectSlug}/${issue.id}`,
             }),
           });
+          const tgData = await tgRes.json();
+          console.log('[Telegram] response:', tgRes.status, tgData);
         } catch (err) {
           console.warn('[Telegram] notification failed:', err);
         }

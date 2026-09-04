@@ -15,21 +15,9 @@ interface TelegramNotifyRequest {
   issue_url?: string;
 }
 
-// ─── Chat ID Mapping ────────────────────────────────────
-// TELEGRAM_CHAT_MAP env var: JSON string mapping user ID → chat ID
-// Example: {"user-dev1":"123456789","user-ceo":"987654321"}
-function getChatId(userId: string): string | null {
-  const raw = process.env.TELEGRAM_CHAT_MAP;
-  if (!raw) return null;
-
-  try {
-    const map = JSON.parse(raw) as Record<string, string>;
-    return map[userId] ?? null;
-  } catch {
-    console.error('[Telegram] TELEGRAM_CHAT_MAP is not valid JSON');
-    return null;
-  }
-}
+// ─── Group Topic Config ──────────────────────────────────
+// TELEGRAM_CHAT_ID: Group chat ID (e.g. -1002011880068)
+// TELEGRAM_MESSAGE_THREAD_ID: Topic thread ID within the group (e.g. 67730)
 
 // ─── Deduplication ──────────────────────────────────────
 // In-memory set to prevent duplicate notifications for the same issue
@@ -78,7 +66,7 @@ export async function POST(request: NextRequest) {
 
   const { issue_id, project, title, priority, assignee_name, assignee_id, reporter_name, status, issue_url } = body;
 
-  if (!issue_id || !assignee_id) {
+  if (!issue_id) {
     return NextResponse.json({ ok: false, reason: 'missing_fields' }, { status: 400 });
   }
 
@@ -87,11 +75,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: true, reason: 'already_notified' });
   }
 
-  const chatId = getChatId(assignee_id);
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  const threadId = process.env.TELEGRAM_MESSAGE_THREAD_ID;
+
   if (!chatId) {
-    console.warn(`[Telegram] No chat_id mapped for user: ${assignee_id}`);
+    console.warn('[Telegram] TELEGRAM_CHAT_ID not configured, skipping notification');
     return NextResponse.json(
-      { ok: false, reason: 'no_chat_id', user: assignee_id },
+      { ok: false, reason: 'chat_id_not_configured' },
       { status: 200 }
     );
   }
@@ -122,7 +112,8 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: chatId,
+        chat_id: Number(chatId),
+        ...(threadId ? { message_thread_id: Number(threadId) } : {}),
         text: message,
         parse_mode: 'HTML',
       }),
@@ -139,7 +130,7 @@ export async function POST(request: NextRequest) {
     }
 
     notifiedIssues.add(issue_id);
-    console.log(`[Telegram] Notification sent for ${issue_id} to chat ${chatId}`);
+    console.log(`[Telegram] Notification sent for ${issue_id} to group ${chatId}${threadId ? ` (topic ${threadId})` : ''}`);
     return NextResponse.json({ ok: true, sent: true });
   } catch (err) {
     console.error('[Telegram] Network error:', err);

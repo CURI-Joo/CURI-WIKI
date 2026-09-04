@@ -209,31 +209,29 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
         }
       }
 
-      // Telegram notification
-      if (assigneeId) {
-        const assignee = profiles.find((p) => p.id === assigneeId);
-        try {
-          const tgRes = await fetch('/api/telegram', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              issue_id: issue.id,
-              project: projectName,
-              title: issue.title,
-              priority: issue.priority,
-              assignee_name: assignee?.name ?? assigneeId,
-              assignee_id: assigneeId,
-              reporter_name: profile.name,
-              status: issue.status,
-              issue_url: `/issues/${projectSlug}/${issue.id}`,
-            }),
-          });
-          const tgData = await tgRes.json();
-          console.log('[Telegram] response:', tgRes.status, tgData);
-        } catch (err) {
-          console.warn('[Telegram] notification failed:', err);
-        }
+      // Telegram notification (그룹 Topic으로 전송)
+      try {
+        const assignee = assigneeId ? profiles.find((p) => p.id === assigneeId) : null;
+        const tgRes = await fetch('/api/telegram', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            issue_id: issue.id,
+            project: projectName,
+            title: issue.title,
+            priority: issue.priority,
+            assignee_name: assignee?.name ?? (assigneeId || '미지정'),
+            assignee_id: assigneeId || '',
+            reporter_name: profile.name,
+            status: issue.status,
+            issue_url: `/issues/${projectSlug}/${issue.id}`,
+          }),
+        });
+        const tgData = await tgRes.json();
+        console.log('[Telegram] response:', tgRes.status, tgData);
+      } catch (err) {
+        console.warn('[Telegram] notification failed:', err);
       }
 
       router.push(`/issues/${projectSlug}/${issue.id}`);

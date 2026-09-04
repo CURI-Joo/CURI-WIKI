@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/lib/auth-context';
 import { createIssue } from '@/lib/issue-store';
-import { seedProfiles } from '@/data/seed-profiles';
+import { useProfiles } from '@/lib/profiles-store';
 import { issueProjectMap } from '@/data/issue-projects';
 import { getIssuePriorityLabel } from '@/lib/issue-labels';
 import type { IssuePriority } from '@/types';
@@ -25,6 +25,7 @@ function formatFileSize(bytes: number): string {
 }
 
 interface AttachmentFile {
+  file: File;
   url: string;
   name: string;
   type: string;
@@ -35,7 +36,8 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
   const { project: projectSlug } = use(params);
   const projectName = issueProjectMap[projectSlug];
   const router = useRouter();
-  const { user } = useAuth();
+  const { profile } = useAuth();
+  const profiles = useProfiles();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
@@ -47,8 +49,6 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-
-  const activeProfiles = seedProfiles.filter((p) => p.status === 'active');
 
   const totalSize = attachments.reduce((sum, a) => sum + a.size, 0);
 
@@ -98,6 +98,7 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
 
     if (validFiles.length > 0) {
       const newAttachments = validFiles.map((file) => ({
+        file,
         url: URL.createObjectURL(file),
         name: file.name,
         type: file.type,
@@ -173,7 +174,7 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
   }, [validateAndAddFiles]);
 
   const handleSubmit = async () => {
-    if (!user) return;
+    if (!profile) return;
     if (!projectName) return;
     if (!title.trim()) {
       setError('이슈 제목을 입력해주세요.');
@@ -188,19 +189,29 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
     setError(null);
 
     try {
-      const issue = createIssue({
+      const issue = await createIssue({
         title,
         description,
         project: projectName,
         priority,
-        reporter_id: user.id,
+        reporter_id: profile.id,
         assignee_id: assigneeId || null,
-        attachments: attachments.map((a) => a.url),
       });
 
-      // Telegram notification (fire-and-forget, never blocks issue creation)
+      // Upload attachments (fire-and-forget, don't block navigation)
+      if (attachments.length > 0) {
+        for (const att of attachments) {
+          const formData = new FormData();
+          formData.append('file', att.file);
+          formData.append('issue_id', issue.id);
+          fetch('/api/upload', { method: 'POST', body: formData })
+            .catch((err) => console.warn('[Upload] attachment failed:', err));
+        }
+      }
+
+      // Telegram notification (fire-and-forget)
       if (assigneeId) {
-        const assigneeProfile = activeProfiles.find((p) => p.id === assigneeId);
+        const assignee = profiles.find((p) => p.id === assigneeId);
         fetch('/api/telegram', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -209,9 +220,9 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
             project: projectName,
             title: issue.title,
             priority: issue.priority,
-            assignee_name: assigneeProfile?.name ?? assigneeId,
+            assignee_name: assignee?.name ?? assigneeId,
             assignee_id: assigneeId,
-            reporter_name: user.name,
+            reporter_name: profile.name,
             status: issue.status,
             issue_url: `/issues/${projectSlug}/${issue.id}`,
           }),
@@ -297,7 +308,7 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
             className="w-full rounded-lg border border-border bg-surface-elevated px-3 py-2 text-sm text-text-primary outline-none focus:border-curi-pink"
           >
             <option value="">미지정</option>
-            {activeProfiles.map((p) => (
+            {profiles.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
@@ -394,7 +405,7 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
       </div>
 
       <p className="text-[11px] text-text-muted">
-        * 데모 모드에서 첨부파일은 새로고침 시 유지되지 않습니다.
+        * 첨부파일은 Supabase Storage에 저장됩니다.
       </p>
     </div>
   );

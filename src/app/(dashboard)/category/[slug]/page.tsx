@@ -6,10 +6,8 @@ import { ArrowLeft, FileText, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DocumentAlbumGrid } from '@/components/documents/document-album-grid';
 import { seedCategories } from '@/data/seed-categories';
-import { seedProfiles } from '@/data/seed-profiles';
 import { useAuth } from '@/lib/auth-context';
 import { useDocumentStore } from '@/lib/document-store';
-import { canReadDocument } from '@/lib/permissions';
 
 export default function CategoryPage({
   params,
@@ -17,10 +15,10 @@ export default function CategoryPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  const { user } = useAuth();
-  const { documents, access } = useDocumentStore();
+  const { profile } = useAuth();
+  const { documents, loading } = useDocumentStore();
 
-  if (!user) return null;
+  if (!profile) return null;
 
   const category = seedCategories.find((c) => c.slug === slug);
 
@@ -35,13 +33,16 @@ export default function CategoryPage({
     );
   }
 
-  const accessibleDocIds = access
-    .filter((a) => a.user_id === user.id)
-    .map((a) => a.document_id);
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-6xl py-16 text-center">
+        <p className="text-sm text-text-muted">로딩 중...</p>
+      </div>
+    );
+  }
 
   const docs = documents
     .filter((doc) => doc.category_id === category.id)
-    .filter((doc) => canReadDocument(user, doc, accessibleDocIds, doc.id))
     .sort(
       (a, b) =>
         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
@@ -79,7 +80,7 @@ export default function CategoryPage({
         <DocumentAlbumGrid
           documents={docs}
           categories={seedCategories}
-          profiles={seedProfiles}
+          profiles={[]}
         />
       )}
     </div>

@@ -4,55 +4,45 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { seedCategories } from '@/data/seed-categories';
-import { seedProfiles } from '@/data/seed-profiles';
-import { DocumentAccessSelector } from '@/components/documents/document-access-selector';
 import { createStoredDocument } from '@/lib/document-store';
-import { getDocumentStatusLabel, getExternalStatusLabel } from '@/lib/document-labels';
 import { ArrowLeft, Save, Eye } from 'lucide-react';
 import Link from 'next/link';
-import type { DocStatus, Visibility, ExternalStatus } from '@/types';
 
 export default function NewDocumentPage() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const router = useRouter();
 
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
-  const [categoryId, setCategoryId] = useState('cat-engineering');
-  const [status, setStatus] = useState<DocStatus>('Draft');
-  const [visibility, setVisibility] = useState<Visibility>('COMPANY');
-  const [externalStatus, setExternalStatus] = useState<ExternalStatus>('INTERNAL_ONLY');
-  const [allowedUserIds, setAllowedUserIds] = useState<string[]>([]);
+  const [categoryId, setCategoryId] = useState(seedCategories[0]?.id ?? '');
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
-  if (!user) return null;
+  if (!profile) return null;
 
   const handleSave = async () => {
     if (!title.trim()) return;
     setSaving(true);
 
-    const doc = createStoredDocument({
-      title,
-      summary,
-      categoryId,
-      projectId: '',
-      status,
-      visibility,
-      externalStatus,
-      content,
-      userId: user.id,
-      allowedUserIds,
-    });
+    try {
+      const doc = await createStoredDocument({
+        title,
+        summary,
+        categoryId,
+        content,
+        userId: profile.id,
+      });
 
-    setSaving(false);
-    setSaved(true);
-    router.push(`/documents/${doc.slug}`);
+      setSaved(true);
+      router.push(`/documents/${doc.slug}`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '저장에 실패했습니다.');
+    } finally {
+      setSaving(false);
+    }
   };
-
-  const categories = seedCategories.filter((c) => c.slug !== 'home');
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -84,67 +74,19 @@ export default function NewDocumentPage() {
         className="w-full text-sm bg-transparent border-none text-text-secondary placeholder:text-text-muted focus:outline-none"
       />
 
-      {/* Meta fields */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <div>
-          <label className="block text-xs text-text-muted mb-1">카테고리</label>
-          <select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none focus:border-curi-pink/50"
-          >
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-text-muted mb-1">상태</label>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as DocStatus)}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none focus:border-curi-pink/50"
-          >
-            <option value="Draft">{getDocumentStatusLabel('Draft')}</option>
-            <option value="Published">{getDocumentStatusLabel('Published')}</option>
-            <option value="Archived">{getDocumentStatusLabel('Archived')}</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-text-muted mb-1">공개 범위</label>
-          <select
-            value={visibility}
-            onChange={(e) => {
-              const nextVisibility = e.target.value as Visibility;
-              setVisibility(nextVisibility);
-              if (nextVisibility === 'COMPANY') setAllowedUserIds([]);
-            }}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none focus:border-curi-pink/50"
-          >
-            <option value="COMPANY">전체 공개</option>
-            <option value="RESTRICTED">제한 공개</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-text-muted mb-1">외부 활용</label>
-          <select
-            value={externalStatus}
-            onChange={(e) => setExternalStatus(e.target.value as ExternalStatus)}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none focus:border-curi-pink/50"
-          >
-            <option value="INTERNAL_ONLY">{getExternalStatusLabel('INTERNAL_ONLY')}</option>
-            <option value="REVIEW_REQUIRED">{getExternalStatusLabel('REVIEW_REQUIRED')}</option>
-            <option value="EXTERNAL_OK">{getExternalStatusLabel('EXTERNAL_OK')}</option>
-          </select>
-        </div>
+      {/* Category */}
+      <div className="max-w-xs">
+        <label className="block text-xs text-text-muted mb-1">카테고리</label>
+        <select
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none focus:border-curi-pink/50"
+        >
+          {seedCategories.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
       </div>
-
-      <DocumentAccessSelector
-        profiles={seedProfiles}
-        selectedUserIds={allowedUserIds}
-        visibility={visibility}
-        onChange={setAllowedUserIds}
-      />
 
       {/* Editor toggle */}
       <div className="flex items-center gap-2 border-b border-border pb-2">

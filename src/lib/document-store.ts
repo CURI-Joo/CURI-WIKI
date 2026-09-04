@@ -1,31 +1,35 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { AccessLevel, Document, DocumentAccess } from '@/types';
-import { seedDocumentAccess } from '@/data/seed-tags';
-import { seedDocuments } from '@/data/seed-documents';
+import { demoDocumentAccess, demoDocuments } from '@/data/demo-data';
+import { isDemoMode } from '@/lib/demo-mode';
+import { createClient } from '@/lib/supabase/client';
 import { slugify } from '@/lib/utils';
 
-const DOCUMENTS_KEY = 'curi-wiki-documents-v1';
-const ACCESS_KEY = 'curi-wiki-document-access-v1';
+const DOCUMENTS_KEY = 'curi-wiki-documents-v2';
+const ACCESS_KEY = 'curi-wiki-document-access-v2';
 const STORE_EVENT = 'curi-wiki-document-store-change';
 
 interface DocumentStoreState {
   documents: Document[];
-  access: DocumentAccess[];
+  loading: boolean;
 }
 
-interface UpsertDocumentInput {
+interface CreateDocumentInput {
   title: string;
   summary: string;
   categoryId: string;
-  projectId: string;
-  status: Document['status'];
-  visibility: Document['visibility'];
-  externalStatus: Document['external_status'];
   content: string;
   userId: string;
-  allowedUserIds: string[];
+}
+
+interface UpdateDocumentInput {
+  title: string;
+  summary: string;
+  categoryId: string;
+  content: string;
+  userId: string;
 }
 
 function isBrowser() {
@@ -80,7 +84,7 @@ function writeCustomAccess(access: DocumentAccess[]) {
 function getMergedDocuments() {
   const byId = new Map<string, Document>();
 
-  for (const document of seedDocuments) {
+  for (const document of demoDocuments) {
     byId.set(document.id, document);
   }
 
@@ -96,14 +100,14 @@ function getMergedAccess() {
   const customDocumentIds = new Set(customAccess.map((access) => access.document_id));
 
   return [
-    ...seedDocumentAccess.filter(
+    ...demoDocumentAccess.filter(
       (access) => !customDocumentIds.has(access.document_id)
     ),
     ...customAccess,
   ];
 }
 
-function createUniqueSlug(title: string, documentId?: string) {
+function createLocalUniqueSlug(title: string, documentId?: string) {
   const base = slugify(title) || 'untitled';
   const documents = getMergedDocuments();
   let slug = base;
@@ -119,6 +123,35 @@ function createUniqueSlug(title: string, documentId?: string) {
   }
 
   return slug;
+}
+
+async function createRemoteUniqueSlug(
+  supabase: ReturnType<typeof createClient>,
+  title: string,
+  excludeId?: string
+): Promise<string> {
+  const base = slugify(title) || 'untitled';
+  const { data } = await supabase
+    .from('documents')
+    .select('slug')
+    .like('slug', `${base}%`);
+
+  const existingSlugs = new Set((data ?? []).map((d: { slug: string }) => d.slug));
+
+  if (excludeId) {
+    const { data: current } = await supabase
+      .from('documents')
+      .select('slug')
+      .eq('id', excludeId)
+      .single();
+    if (current) existingSlugs.delete(current.slug);
+  }
+
+  if (!existingSlugs.has(base)) return base;
+
+  let suffix = 2;
+  while (existingSlugs.has(`${base}-${suffix}`)) suffix++;
+  return `${base}-${suffix}`;
 }
 
 function buildAccess(documentId: string, userIds: string[], accessLevel: AccessLevel = 'VIEW') {
@@ -139,115 +172,179 @@ function replaceDocumentAccess(documentId: string, allowedUserIds: string[]) {
   writeCustomAccess(nextAccess);
 }
 
-export function getDocumentStoreState(): DocumentStoreState {
-  return {
-    documents: getMergedDocuments(),
-    access: getMergedAccess(),
-  };
-}
-
 export function getAllDocuments() {
-  return getMergedDocuments();
+  return isDemoMode() ? getMergedDocuments() : [];
 }
 
 export function getAllDocumentAccess() {
-  return getMergedAccess();
-}
-
-export function getDocumentBySlug(slug: string) {
-  return getMergedDocuments().find((document) => document.slug === slug) ?? null;
-}
-
-export function getAllowedUserIdsForDocument(documentId: string) {
-  return getMergedAccess()
-    .filter((access) => access.document_id === documentId)
-    .map((access) => access.user_id);
+  return isDemoMode() ? getMergedAccess() : [];
 }
 
 export function getUserAccessibleDocIds(userId: string) {
-  return getMergedAccess()
+  return getAllDocumentAccess()
     .filter((access) => access.user_id === userId)
     .map((access) => access.document_id);
 }
 
-export function createStoredDocument(input: UpsertDocumentInput) {
+function createLocalStoredDocument(input: CreateDocumentInput): Document {
   const now = new Date().toISOString();
-  const documentId = createId('doc');
   const document: Document = {
-    id: documentId,
+    id: createId('doc'),
     title: input.title.trim(),
-    slug: createUniqueSlug(input.title),
+    slug: createLocalUniqueSlug(input.title),
     summary: input.summary.trim(),
     content_markdown: input.content,
     category_id: input.categoryId,
-    project_id: input.projectId || null,
     owner_id: input.userId,
-    status: input.status,
-    visibility: input.visibility,
-    external_status: input.externalStatus,
+    status: 'Published',
+    visibility: 'COMPANY',
+    external_status: 'INTERNAL_ONLY',
     created_by: input.userId,
     updated_by: input.userId,
     created_at: now,
     updated_at: now,
-    published_at: input.status === 'Published' ? now : null,
+    published_at: now,
   };
 
   writeCustomDocuments([...getCustomDocuments(), document]);
-  replaceDocumentAccess(
-    document.id,
-    document.visibility === 'RESTRICTED' ? input.allowedUserIds : []
-  );
+  replaceDocumentAccess(document.id, []);
   emitStoreChange();
 
   return document;
 }
 
-export function updateStoredDocument(
+function updateLocalStoredDocument(
   documentId: string,
-  input: UpsertDocumentInput
-) {
+  input: UpdateDocumentInput
+): Document {
   const existing = getMergedDocuments().find((document) => document.id === documentId);
   if (!existing) throw new Error('Document not found');
 
   const updated: Document = {
     ...existing,
     title: input.title.trim(),
-    slug: createUniqueSlug(input.title, documentId),
+    slug: createLocalUniqueSlug(input.title, documentId),
     summary: input.summary.trim(),
     content_markdown: input.content,
     category_id: input.categoryId,
-    project_id: input.projectId || null,
-    status: input.status,
-    visibility: input.visibility,
-    external_status: input.externalStatus,
     updated_by: input.userId,
     updated_at: new Date().toISOString(),
-    published_at:
-      input.status === 'Published'
-        ? existing.published_at ?? new Date().toISOString()
-        : existing.published_at,
   };
 
   writeCustomDocuments([
     ...getCustomDocuments().filter((document) => document.id !== documentId),
     updated,
   ]);
-  replaceDocumentAccess(
-    updated.id,
-    updated.visibility === 'RESTRICTED' ? input.allowedUserIds : []
-  );
+  replaceDocumentAccess(updated.id, []);
   emitStoreChange();
 
   return updated;
 }
 
+export async function createStoredDocument(
+  input: CreateDocumentInput
+): Promise<Document> {
+  if (isDemoMode()) return createLocalStoredDocument(input);
+
+  const supabase = createClient();
+  const slug = await createRemoteUniqueSlug(supabase, input.title);
+
+  const { data, error } = await supabase
+    .from('documents')
+    .insert({
+      title: input.title.trim(),
+      slug,
+      summary: input.summary.trim(),
+      content_markdown: input.content,
+      category_id: input.categoryId,
+      owner_id: input.userId,
+      status: 'Published',
+      visibility: 'COMPANY',
+      external_status: 'INTERNAL_ONLY',
+      created_by: input.userId,
+      updated_by: input.userId,
+      published_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as Document;
+}
+
+export async function updateStoredDocument(
+  documentId: string,
+  input: UpdateDocumentInput
+): Promise<Document> {
+  if (isDemoMode()) return updateLocalStoredDocument(documentId, input);
+
+  const supabase = createClient();
+  const slug = await createRemoteUniqueSlug(supabase, input.title, documentId);
+
+  const { data, error } = await supabase
+    .from('documents')
+    .update({
+      title: input.title.trim(),
+      slug,
+      summary: input.summary.trim(),
+      content_markdown: input.content,
+      category_id: input.categoryId,
+      updated_by: input.userId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', documentId)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data as Document;
+}
+
 export function useDocumentStore() {
-  const [state, setState] = useState<DocumentStoreState>(() =>
-    getDocumentStoreState()
-  );
+  const isDemo = isDemoMode();
+  const [state, setState] = useState<DocumentStoreState>(() => ({
+    documents: isDemo ? getMergedDocuments() : [],
+    loading: !isDemo,
+  }));
+
+  const refresh = useCallback(async () => {
+    if (isDemo) {
+      setState({ documents: getMergedDocuments(), loading: false });
+      return;
+    }
+
+    const supabase = createClient();
+    const { data } = await supabase
+      .from('documents')
+      .select('*')
+      .order('updated_at', { ascending: false });
+    setState({ documents: (data ?? []) as Document[], loading: false });
+  }, [isDemo]);
 
   useEffect(() => {
-    const sync = () => setState(getDocumentStoreState());
+    if (!isDemo) {
+      let cancelled = false;
+
+      async function loadDocuments() {
+        const supabase = createClient();
+        const { data } = await supabase
+          .from('documents')
+          .select('*')
+          .order('updated_at', { ascending: false });
+
+        if (!cancelled) {
+          setState({ documents: (data ?? []) as Document[], loading: false });
+        }
+      }
+
+      void loadDocuments();
+
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const sync = () => setState({ documents: getMergedDocuments(), loading: false });
     const handleStorage = (event: StorageEvent) => {
       if (event.key === DOCUMENTS_KEY || event.key === ACCESS_KEY) sync();
     };
@@ -259,7 +356,7 @@ export function useDocumentStore() {
       window.removeEventListener(STORE_EVENT, sync);
       window.removeEventListener('storage', handleStorage);
     };
-  }, []);
+  }, [isDemo]);
 
-  return state;
+  return { ...state, refresh };
 }

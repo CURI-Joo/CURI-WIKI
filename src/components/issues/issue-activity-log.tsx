@@ -1,22 +1,27 @@
 'use client';
 
-import type { IssueActivity } from '@/types';
-import { seedProfiles } from '@/data/seed-profiles';
+import type { IssueActivity, Profile } from '@/types';
 import { formatRelativeDate } from '@/lib/utils';
 import { PlusCircle, ArrowRight } from 'lucide-react';
 
-function getActorName(actorId: string): string {
-  const profile = seedProfiles.find((p) => p.id === actorId);
+function getActorName(profiles: Profile[], actorId: string): string {
+  const profile = profiles.find((p) => p.id === actorId);
   return profile?.name ?? actorId;
 }
 
-export function IssueActivityLog({ activities }: { activities: IssueActivity[] }) {
+export function IssueActivityLog({
+  activities,
+  profiles,
+}: {
+  activities: IssueActivity[];
+  profiles: Profile[];
+}) {
   if (activities.length === 0) return null;
 
   return (
     <div className="space-y-0">
       {activities.map((activity) => {
-        const actorName = getActorName(activity.actor_id);
+        const actorName = getActorName(profiles, activity.actor_id);
         const Icon = activity.type === 'created' ? PlusCircle : ArrowRight;
 
         return (

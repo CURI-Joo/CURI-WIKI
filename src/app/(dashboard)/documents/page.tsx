@@ -3,8 +3,6 @@
 import { useAuth } from '@/lib/auth-context';
 import { useSearchParams } from 'next/navigation';
 import { seedCategories } from '@/data/seed-categories';
-import { seedProfiles } from '@/data/seed-profiles';
-import { canReadDocument } from '@/lib/permissions';
 import { DocumentAlbumGrid } from '@/components/documents/document-album-grid';
 import { useDocumentStore } from '@/lib/document-store';
 import Link from 'next/link';
@@ -12,21 +10,23 @@ import { useState, Suspense } from 'react';
 import { FileText, Plus, Search } from 'lucide-react';
 
 function DocumentsContent() {
-  const { user } = useAuth();
-  const { documents, access } = useDocumentStore();
+  const { profile } = useAuth();
+  const { documents, loading } = useDocumentStore();
   const searchParams = useSearchParams();
   const categorySlug = searchParams.get('category');
   const [search, setSearch] = useState('');
 
-  if (!user) return null;
+  if (!profile) return null;
 
-  const accessibleDocIds = access
-    .filter((a) => a.user_id === user.id)
-    .map((a) => a.document_id);
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto py-16 text-center">
+        <p className="text-sm text-text-muted">로딩 중...</p>
+      </div>
+    );
+  }
 
-  let docs = documents.filter((doc) =>
-    canReadDocument(user, doc, accessibleDocIds, doc.id)
-  );
+  let docs = [...documents];
 
   const category = categorySlug
     ? seedCategories.find((c) => c.slug === categorySlug)
@@ -87,7 +87,7 @@ function DocumentsContent() {
         <DocumentAlbumGrid
           documents={docs}
           categories={seedCategories}
-          profiles={seedProfiles}
+          profiles={[]}
         />
       )}
     </div>

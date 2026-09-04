@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Search, FileText, Clock, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
-import { mockRepository } from '@/data/mock-repository';
+import { getRepository } from '@/lib/repository';
 import type { SearchResult } from '@/types';
 
 interface CommandPaletteProps {
@@ -42,7 +42,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { user } = useAuth();
+  const { profile } = useAuth();
 
   // Load recent searches when opened
   useEffect(() => {
@@ -65,7 +65,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   // Search as user types
   useEffect(() => {
-    if (!query.trim() || !user) {
+    if (!query.trim() || !profile) {
       const resetTimer = window.setTimeout(() => {
         setResults([]);
         setSelectedIndex(0);
@@ -79,7 +79,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     const timer = window.setTimeout(async () => {
       setIsSearching(true);
       try {
-        const searchResults = await mockRepository.search(query, user.id);
+        const repo = getRepository();
+        const searchResults = await repo.search(query, profile.id);
         if (!cancelled) {
           setResults(searchResults);
           setSelectedIndex(0);
@@ -95,7 +96,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [query, user]);
+  }, [query, profile]);
 
   // Group results by type
   const hasQuery = query.trim().length > 0;
@@ -219,14 +220,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         {/* Results */}
         <div ref={listRef} className="max-h-80 overflow-y-auto p-2">
           {/* No user logged in */}
-          {!user && (
+          {!profile && (
             <p className="px-3 py-6 text-center text-sm text-text-muted">
               검색하려면 로그인이 필요합니다
             </p>
           )}
 
           {/* Recent searches (when no query) */}
-          {user && !query.trim() && recentSearches.length > 0 && (
+          {profile && !query.trim() && recentSearches.length > 0 && (
             <div>
               <p className="px-3 py-1.5 text-xs font-medium uppercase tracking-wider text-text-muted">
                 최근 검색
@@ -254,7 +255,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           )}
 
           {/* Empty state when no query */}
-          {user && !query.trim() && recentSearches.length === 0 && (
+          {profile && !query.trim() && recentSearches.length === 0 && (
             <p className="px-3 py-6 text-center text-sm text-text-muted">
               검색어를 입력하세요
             </p>
@@ -266,7 +267,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           )}
 
           {/* No results */}
-          {user && query.trim() && !isSearching && results.length === 0 && (
+          {profile && query.trim() && !isSearching && results.length === 0 && (
             <p className="px-3 py-6 text-center text-sm text-text-muted">
               &quot;{query}&quot;에 대한 검색 결과가 없습니다
             </p>

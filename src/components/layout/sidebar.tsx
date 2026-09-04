@@ -18,6 +18,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  UserCog,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -37,7 +38,7 @@ export function Sidebar() {
   const [homeOpen, setHomeOpen] = useState(true);
   const [issueOpen, setIssueOpen] = useState(true);
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { profile, logout } = useAuth();
 
   useEffect(() => {
     const timer = window.setTimeout(() => setMobileOpen(false), 0);
@@ -56,6 +57,7 @@ export function Sidebar() {
   const isHomeActive = pathname === '/home' || pathname === '/' || pathname.startsWith('/documents') || pathname.startsWith('/category/');
   const isIssueActive = pathname.startsWith('/issues');
   const isIssueRootActive = pathname === '/issues';
+  const isAdminActive = pathname.startsWith('/admin');
 
   // Auto-expand HOME when navigating to its children
   useEffect(() => {
@@ -202,20 +204,38 @@ export function Sidebar() {
               </div>
             )}
           </div>
+
+          {profile?.role === 'admin' && (
+            <>
+              <div className="h-1" />
+              <Link
+                href="/admin/users"
+                className={cn(
+                  'flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors',
+                  isAdminActive
+                    ? 'bg-curi-pink-soft text-text-primary'
+                    : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+                )}
+              >
+                <UserCog className={cn('h-4 w-4', isAdminActive ? 'text-curi-pink' : 'text-text-muted')} />
+                관리
+              </Link>
+            </>
+          )}
         </div>
       </nav>
 
       {/* User */}
       <div className="border-t border-border p-3">
-        {user && (
+        {profile && (
           <div className="space-y-2">
             <div className="flex items-center gap-2.5">
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-elevated text-[10px] font-medium text-text-secondary">
-                {getInitials(user.name)}
+                {getInitials(profile.name)}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium text-text-primary">{user.name}</p>
-                <p className="truncate text-[11px] text-text-muted">{user.email}</p>
+                <p className="truncate text-[13px] font-medium text-text-primary">{profile.name}</p>
+                <p className="truncate text-[11px] text-text-muted">{profile.email}</p>
               </div>
             </div>
             <div className="flex items-center gap-1.5">

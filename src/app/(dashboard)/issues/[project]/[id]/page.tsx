@@ -1,19 +1,21 @@
 'use client';
 
-import { use } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Film, Trash2 } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
+import { isDemoMode } from '@/lib/demo-mode';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth-context';
 import { useIssueStore, transitionIssueStatus, deleteIssue } from '@/lib/issue-store';
+import { useProfiles, getProfileName } from '@/lib/profiles-store';
 import { canDeleteIssue, canTransitionIssue } from '@/lib/issue-permissions';
 import { IssueStatusBadge } from '@/components/issues/issue-status-badge';
 import { IssuePriorityBadge } from '@/components/issues/issue-priority-badge';
 import { IssueActionButtons } from '@/components/issues/issue-action-buttons';
 import { IssueActivityLog } from '@/components/issues/issue-activity-log';
-import { seedProfiles } from '@/data/seed-profiles';
 import { formatDate } from '@/lib/utils';
 import type { IssueStatus } from '@/types';
 
@@ -23,14 +25,60 @@ export default function ProjectIssueDetailPage({
   params: Promise<{ project: string; id: string }>;
 }) {
   const { project: projectSlug, id } = use(params);
-  const { user } = useAuth();
-  const { issues, activities } = useIssueStore();
+  const { profile } = useAuth();
+  const { issues, activities, loading, refresh } = useIssueStore();
+  const profiles = useProfiles();
   const router = useRouter();
+  const isDemo = isDemoMode();
+  const [attachmentUrls, setAttachmentUrls] = useState<{ id: string; url: string; file_name: string; mime_type: string }[]>([]);
 
   const issue = issues.find((i) => i.id === id);
   const issueActivities = activities
     .filter((a) => a.issue_id === id)
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  useEffect(() => {
+    if (isDemo || !id) return;
+
+    let cancelled = false;
+
+    async function loadAttachments() {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from('attachments')
+        .select('id, file_name, mime_type')
+        .eq('issue_id', id);
+
+      if (!data || data.length === 0) return;
+
+      const urls = await Promise.all(
+        data.map(async (att: { id: string; file_name: string; mime_type: string }) => {
+          const res = await fetch(`/api/upload/${att.id}`);
+          if (!res.ok) return null;
+          const json = await res.json();
+          return { id: att.id, url: json.url, file_name: att.file_name, mime_type: att.mime_type };
+        })
+      );
+
+      if (!cancelled) {
+        setAttachmentUrls(urls.filter(Boolean) as { id: string; url: string; file_name: string; mime_type: string }[]);
+      }
+    }
+
+    void loadAttachments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isDemo, id]);
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-3xl py-20 text-center">
+        <p className="text-sm text-text-muted">로딩 중...</p>
+      </div>
+    );
+  }
 
   if (!issue) {
     return (
@@ -43,27 +91,23 @@ export default function ProjectIssueDetailPage({
     );
   }
 
-  const reporter = seedProfiles.find((p) => p.id === issue.reporter_id);
-  const assignee = issue.assignee_id
-    ? seedProfiles.find((p) => p.id === issue.assignee_id)
-    : null;
-
-  const handleTransition = (newStatus: IssueStatus) => {
-    if (!user) return;
+  const handleTransition = async (newStatus: IssueStatus) => {
+    if (!profile) return;
     try {
-      transitionIssueStatus(issue.id, newStatus, user.id);
+      await transitionIssueStatus(issue.id, newStatus, profile.id);
+      await refresh();
     } catch (err) {
       alert(err instanceof Error ? err.message : '상태 변경에 실패했습니다.');
     }
   };
 
-  const handleDelete = () => {
-    if (!user) return;
+  const handleDelete = async () => {
+    if (!profile) return;
     const confirmed = window.confirm(`${issue.id} 이슈를 삭제할까요? 삭제 후에는 목록에서 보이지 않습니다.`);
     if (!confirmed) return;
 
     try {
-      deleteIssue(issue.id);
+      await deleteIssue(issue.id);
       router.push(`/issues/${projectSlug}`);
     } catch (err) {
       alert(err instanceof Error ? err.message : '이슈 삭제에 실패했습니다.');
@@ -94,7 +138,7 @@ export default function ProjectIssueDetailPage({
             <IssuePriorityBadge priority={issue.priority} />
             <IssueStatusBadge status={issue.status} />
           </div>
-          {user && canDeleteIssue(user) && (
+          {profile && canDeleteIssue(profile) && (
             <button
               type="button"
               onClick={handleDelete}
@@ -117,18 +161,18 @@ export default function ProjectIssueDetailPage({
         </div>
 
         {/* Attachments */}
-        {issue.attachments.length > 0 && (
+        {attachmentUrls.length > 0 && (
           <div className="space-y-2">
             <p className="text-[13px] font-medium text-text-secondary">첨부파일</p>
             <div className="grid grid-cols-2 gap-2">
-              {issue.attachments.map((url, i) => (
-                <div key={i} className="rounded-lg border border-border overflow-hidden bg-surface-elevated">
-                  {url.includes('video') ? (
+              {attachmentUrls.map((att) => (
+                <div key={att.id} className="rounded-lg border border-border overflow-hidden bg-surface-elevated">
+                  {att.mime_type.startsWith('video/') ? (
                     <div className="flex items-center justify-center h-32">
                       <Film className="h-8 w-8 text-text-muted" />
                     </div>
                   ) : (
-                    <img src={url} alt={`첨부 ${i + 1}`} className="h-32 w-full object-cover" />
+                    <img src={att.url} alt={att.file_name} className="h-32 w-full object-cover" />
                   )}
                 </div>
               ))}
@@ -140,11 +184,15 @@ export default function ProjectIssueDetailPage({
         <div className="grid grid-cols-2 gap-3 rounded-lg bg-surface-elevated p-4 text-[13px]">
           <div>
             <span className="text-text-muted">등록자</span>
-            <p className="font-medium text-text-primary">{reporter?.name ?? issue.reporter_id}</p>
+            <p className="font-medium text-text-primary">
+              {getProfileName(profiles, issue.reporter_id)}
+            </p>
           </div>
           <div>
             <span className="text-text-muted">담당자</span>
-            <p className="font-medium text-text-primary">{assignee?.name ?? '-'}</p>
+            <p className="font-medium text-text-primary">
+              {issue.assignee_id ? getProfileName(profiles, issue.assignee_id) : '-'}
+            </p>
           </div>
           <div>
             <span className="text-text-muted">등록일</span>
@@ -157,7 +205,7 @@ export default function ProjectIssueDetailPage({
         </div>
 
         {/* Actions */}
-        {user && canTransitionIssue(user) && (
+        {profile && canTransitionIssue(profile) && (
           <div className="flex items-center gap-2 pt-2">
             <IssueActionButtons issue={issue} onTransition={handleTransition} />
           </div>
@@ -167,7 +215,7 @@ export default function ProjectIssueDetailPage({
       {/* Activity */}
       <div className="space-y-3">
         <h2 className="text-sm font-bold text-text-primary">Activity</h2>
-        <IssueActivityLog activities={issueActivities} />
+        <IssueActivityLog activities={issueActivities} profiles={profiles} />
       </div>
     </div>
   );

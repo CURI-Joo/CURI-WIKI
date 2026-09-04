@@ -1,15 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import type { Issue } from '@/types';
+import type { Issue, Profile } from '@/types';
 import { IssueStatusBadge } from './issue-status-badge';
 import { IssuePriorityBadge } from './issue-priority-badge';
-import { seedProfiles } from '@/data/seed-profiles';
 import { formatDate } from '@/lib/utils';
 
-export function IssueListItem({ issue }: { issue: Issue }) {
+export function IssueListItem({
+  issue,
+  profiles,
+}: {
+  issue: Issue;
+  profiles: Profile[];
+}) {
   const assignee = issue.assignee_id
-    ? seedProfiles.find((p) => p.id === issue.assignee_id)
+    ? profiles.find((p) => p.id === issue.assignee_id)
     : null;
 
   const projectSlug = issue.project.toLowerCase();

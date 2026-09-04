@@ -11,7 +11,7 @@ export function canReadDocument(
   accessibleDocIds: string[],
   docId: string
 ): boolean {
-  if (user.status !== 'active') return false;
+  if (user.status !== 'approved') return false;
   if (canViewAllDocuments(user)) return true;
   if (doc.visibility === 'COMPANY') return true;
   if (doc.visibility === 'RESTRICTED') {
@@ -25,7 +25,7 @@ export function canEditDocument(
   doc: Pick<Document, 'owner_id'>,
   editableDocIds: string[]
 ): boolean {
-  if (user.status !== 'active') return false;
+  if (user.status !== 'approved') return false;
   if (canViewAllDocuments(user)) return true;
   if (doc.owner_id === user.id) return true;
   return editableDocIds.includes(doc.owner_id);
@@ -34,7 +34,7 @@ export function canEditDocument(
 export function canViewAllDocuments(
   user: Pick<Profile, 'role' | 'status'>
 ): boolean {
-  return user.status === 'active' && (user.role === 'ADMIN' || user.role === 'CEO');
+  return user.status === 'approved' && user.role === 'admin';
 }
 
 export function canManageDocument(
@@ -57,7 +57,7 @@ export function canUseForExternalContent(
 }
 
 export function isActiveUser(user: Pick<Profile, 'status'>): boolean {
-  return user.status === 'active';
+  return user.status === 'approved';
 }
 
 export function filterDocumentsForUser(

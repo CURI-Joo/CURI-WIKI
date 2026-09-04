@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Plus, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIssueStore } from '@/lib/issue-store';
+import { useProfiles } from '@/lib/profiles-store';
 import { IssueSummaryCards } from '@/components/issues/issue-summary-cards';
 import { IssueFilters } from '@/components/issues/issue-filters';
 import { IssueListItem } from '@/components/issues/issue-list-item';
@@ -14,7 +15,8 @@ import type { IssueStatus, IssuePriority } from '@/types';
 export default function ProjectIssuesPage({ params }: { params: Promise<{ project: string }> }) {
   const { project: projectSlug } = use(params);
   const projectName = issueProjectMap[projectSlug];
-  const { issues } = useIssueStore();
+  const { issues, loading } = useIssueStore();
+  const profiles = useProfiles();
   const [status, setStatus] = useState<IssueStatus | 'all'>('all');
   const [priority, setPriority] = useState<IssuePriority | 'all'>('all');
   const [search, setSearch] = useState('');
@@ -42,6 +44,14 @@ export default function ProjectIssuesPage({ params }: { params: Promise<{ projec
         <Link href="/issues">
           <Button variant="ghost" size="sm" className="mt-4">돌아가기</Button>
         </Link>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-5xl py-16 text-center">
+        <p className="text-sm text-text-muted">로딩 중...</p>
       </div>
     );
   }
@@ -95,7 +105,7 @@ export default function ProjectIssuesPage({ params }: { params: Promise<{ projec
           </div>
         ) : (
           filtered.map((issue) => (
-            <IssueListItem key={issue.id} issue={issue} />
+            <IssueListItem key={issue.id} issue={issue} profiles={profiles} />
           ))
         )}
       </div>

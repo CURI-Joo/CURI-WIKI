@@ -8,19 +8,25 @@ import { Search, FileText } from 'lucide-react';
 import type { SearchResult } from '@/types';
 
 export default function SearchPage() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searched, setSearched] = useState(false);
+  const [searching, setSearching] = useState(false);
 
-  if (!user) return null;
+  if (!profile) return null;
 
   const handleSearch = async () => {
     if (!query.trim()) return;
-    const repo = getRepository();
-    const res = await repo.search(query, user.id);
-    setResults(res);
-    setSearched(true);
+    setSearching(true);
+    try {
+      const repo = getRepository();
+      const res = await repo.search(query, profile.id);
+      setResults(res);
+      setSearched(true);
+    } finally {
+      setSearching(false);
+    }
   };
 
   return (

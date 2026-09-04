@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isDemoMode } from '@/lib/demo-mode';
+import { createClient } from '@/lib/supabase/server';
 
 // ─── Types ───────────────────────────────────────────────
 interface TelegramNotifyRequest {
@@ -36,6 +38,27 @@ const notifiedIssues = new Set<string>();
 
 // ─── POST /api/telegram ─────────────────────────────────
 export async function POST(request: NextRequest) {
+  if (!isDemoMode()) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('status')
+      .eq('id', user.id)
+      .single();
+
+    if (profile?.status !== 'approved') {
+      return NextResponse.json({ ok: false, reason: 'forbidden' }, { status: 403 });
+    }
+  }
+
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
 
   if (!botToken) {

@@ -12,13 +12,22 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading } = useAuth();
+  const { session, profile, loading } = useAuth();
   const router = useRouter();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) router.push('/login');
-  }, [user, loading, router]);
+    if (loading) return;
+    if (!session) {
+      router.push('/login');
+      return;
+    }
+    if (profile?.status === 'pending') {
+      router.push('/pending');
+    } else if (profile?.status === 'rejected') {
+      router.push('/rejected');
+    }
+  }, [session, profile, loading, router]);
 
   // Global Cmd+K / Ctrl+K handler
   useEffect(() => {
@@ -40,7 +49,7 @@ export default function DashboardLayout({
     setCommandPaletteOpen(false);
   }, []);
 
-  if (loading || !user) return null;
+  if (loading || !session || profile?.status !== 'approved') return null;
 
   return (
     <div className="flex h-screen overflow-hidden">

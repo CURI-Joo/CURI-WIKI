@@ -1,6 +1,6 @@
 // ─── Enums ───────────────────────────────────────────────
-export type Role = 'ADMIN' | 'CEO' | 'MEMBER';
-export type ProfileStatus = 'active' | 'inactive';
+export type Role = 'admin' | 'member';
+export type ProfileStatus = 'pending' | 'approved' | 'rejected';
 export type ProjectStatus = 'Discovery' | 'Development' | 'Testing' | 'Production' | 'Archived';
 export type DocumentationStatus = 'Complete' | 'Needs Update' | 'Not Documented';
 export type DocStatus = 'Draft' | 'Published' | 'Archived';
@@ -30,7 +30,6 @@ export interface Profile {
   name: string;
   avatar_url: string | null;
   role: Role;
-  title: string;
   status: ProfileStatus;
   created_at: string;
   updated_at: string;
@@ -67,7 +66,6 @@ export interface Document {
   summary: string;
   content_markdown: string;
   category_id: string;
-  project_id: string | null;
   owner_id: string;
   status: DocStatus;
   visibility: Visibility;
@@ -169,7 +167,6 @@ export interface Repository {
 
 export interface DocumentFilters {
   category_id?: string;
-  project_id?: string;
   status?: DocStatus;
   visibility?: Visibility;
   owner_id?: string;

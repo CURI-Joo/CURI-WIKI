@@ -5,16 +5,21 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 export default function RootRedirect() {
-  const { user } = useAuth();
+  const { session, profile, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!user) {
+    if (loading) return;
+    if (!session) {
       router.replace('/login');
-    } else {
+    } else if (profile?.status === 'approved') {
       router.replace('/home');
+    } else if (profile?.status === 'pending') {
+      router.replace('/pending');
+    } else if (profile?.status === 'rejected') {
+      router.replace('/rejected');
     }
-  }, [user, router]);
+  }, [session, profile, loading, router]);
 
   return null;
 }

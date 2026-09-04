@@ -2,12 +2,8 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { seedProfiles } from '@/data/seed-profiles';
 import { seedCategories } from '@/data/seed-categories';
-import { seedDocumentTags, seedTags } from '@/data/seed-tags';
 import { useDocumentStore } from '@/lib/document-store';
-import { getDocumentStatusLabel, getExternalStatusLabel } from '@/lib/document-labels';
-import { canReadDocument } from '@/lib/permissions';
 import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
 import {
@@ -15,19 +11,24 @@ import {
   Calendar,
   Download,
   Edit3,
-  Lock,
-  ShieldAlert,
-  Tag,
   User,
 } from 'lucide-react';
 
 export default function DocumentDetailPage() {
   const { slug } = useParams<{ slug: string }>();
-  const { user } = useAuth();
-  const { documents, access } = useDocumentStore();
+  const { profile } = useAuth();
+  const { documents, loading } = useDocumentStore();
   const router = useRouter();
 
-  if (!user) return null;
+  if (!profile) return null;
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto text-center py-20">
+        <p className="text-text-muted text-sm">로딩 중...</p>
+      </div>
+    );
+  }
 
   const doc = documents.find((d) => d.slug === decodeURIComponent(slug));
 
@@ -42,38 +43,7 @@ export default function DocumentDetailPage() {
     );
   }
 
-  // Permission check
-  const accessibleDocIds = access
-    .filter((a) => a.user_id === user.id)
-    .map((a) => a.document_id);
-
-  if (!canReadDocument(user, doc, accessibleDocIds, doc.id)) {
-    return (
-      <div className="max-w-md mx-auto text-center py-20">
-        <ShieldAlert className="w-12 h-12 text-error mx-auto mb-4" />
-        <h2 className="text-xl font-bold text-text-primary mb-2">접근 권한이 없습니다</h2>
-        <p className="text-text-secondary text-sm mb-4">
-          이 글은 접근이 제한되어 있습니다. 관리자에게 문의하세요.
-        </p>
-        <button
-          onClick={() => router.back()}
-          className="text-curi-pink text-sm hover:underline"
-        >
-          이전 페이지로 돌아가기
-        </button>
-      </div>
-    );
-  }
-
-  const owner = seedProfiles.find((p) => p.id === doc.owner_id);
-  const updater = seedProfiles.find((p) => p.id === doc.updated_by);
   const category = seedCategories.find((c) => c.id === doc.category_id);
-  const accessUsers = access
-    .filter((entry) => entry.document_id === doc.id)
-    .map((entry) => seedProfiles.find((profile) => profile.id === entry.user_id))
-    .filter(Boolean);
-  const docTagIds = seedDocumentTags.filter((dt) => dt.document_id === doc.id).map((dt) => dt.tag_id);
-  const tags = seedTags.filter((t) => docTagIds.includes(t.id));
 
   // Generate TOC from markdown headings
   const headings = doc.content_markdown
@@ -93,12 +63,6 @@ export default function DocumentDetailPage() {
     a.download = `${doc.slug}.md`;
     a.click();
     URL.revokeObjectURL(url);
-  };
-
-  const externalStatusStyle: Record<string, string> = {
-    INTERNAL_ONLY: 'text-text-muted bg-text-muted/10',
-    REVIEW_REQUIRED: 'text-warning bg-warning/10',
-    EXTERNAL_OK: 'text-success bg-success/10',
   };
 
   return (
@@ -128,24 +92,6 @@ export default function DocumentDetailPage() {
 
         {/* Header */}
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            {doc.visibility === 'RESTRICTED' && (
-              <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-warning/10 text-warning border border-warning/20">
-                <Lock className="w-3 h-3" />
-                제한 공개
-              </span>
-            )}
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              doc.status === 'Published' ? 'bg-success/10 text-success' :
-              doc.status === 'Draft' ? 'bg-warning/10 text-warning' :
-              'bg-text-muted/10 text-text-muted'
-            }`}>
-              {getDocumentStatusLabel(doc.status)}
-            </span>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${externalStatusStyle[doc.external_status]}`}>
-              {getExternalStatusLabel(doc.external_status)}
-            </span>
-          </div>
           <h1 className="text-2xl font-bold text-text-primary">{doc.title}</h1>
           <p className="text-text-secondary mt-1">{doc.summary}</p>
 
@@ -153,33 +99,13 @@ export default function DocumentDetailPage() {
           <div className="flex flex-wrap items-center gap-4 mt-4 text-xs text-text-muted">
             <span className="flex items-center gap-1">
               <User className="w-3 h-3" />
-              {owner?.name}
+              {doc.owner_id}
             </span>
             <span className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
               {formatDate(doc.updated_at)}
             </span>
-            {updater && updater.id !== owner?.id && (
-              <span>마지막 수정: {updater.name}</span>
-            )}
-            {doc.visibility === 'RESTRICTED' && (
-              <span>
-                공개 대상: {accessUsers.map((profile) => profile?.name).join(', ') || '작성자만'}
-              </span>
-            )}
           </div>
-
-          {/* Tags */}
-          {tags.length > 0 && (
-            <div className="flex items-center gap-2 mt-3">
-              <Tag className="w-3 h-3 text-text-muted" />
-              {tags.map((tag) => (
-                <span key={tag.id} className="text-xs px-2 py-0.5 rounded-full bg-surface-elevated text-text-secondary">
-                  {tag.name}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Actions */}
@@ -233,7 +159,6 @@ export default function DocumentDetailPage() {
 }
 
 function MarkdownRenderer({ content }: { content: string }) {
-  // Simple markdown to HTML (no raw HTML execution for security)
   const lines = content.split('\n');
   const elements: React.ReactNode[] = [];
   let inCodeBlock = false;
@@ -244,17 +169,13 @@ function MarkdownRenderer({ content }: { content: string }) {
   let tableIndex = 0;
 
   const processInline = (text: string): React.ReactNode => {
-    // Bold, italic, code, links
     const parts: React.ReactNode[] = [];
     let remaining = text;
     let key = 0;
 
     while (remaining.length > 0) {
-      // Code inline
       const codeMatch = remaining.match(/`([^`]+)`/);
-      // Bold
       const boldMatch = remaining.match(/\*\*([^*]+)\*\*/);
-      // Link
       const linkMatch = remaining.match(/\[([^\]]+)\]\(([^)]+)\)/);
 
       const matches = [
@@ -295,7 +216,6 @@ function MarkdownRenderer({ content }: { content: string }) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // Code blocks
     if (line.startsWith('```')) {
       if (!inCodeBlock) {
         inCodeBlock = true;
@@ -316,7 +236,6 @@ function MarkdownRenderer({ content }: { content: string }) {
       continue;
     }
 
-    // Table
     if (line.includes('|') && line.trim().startsWith('|')) {
       if (!inTable) {
         inTable = true;
@@ -327,7 +246,6 @@ function MarkdownRenderer({ content }: { content: string }) {
       if (!cells.every((c) => /^[-:]+$/.test(c))) {
         tableRows.push(cells);
       }
-      // Check if next line is not a table row
       if (i + 1 >= lines.length || !lines[i + 1].trim().startsWith('|')) {
         inTable = false;
         const [header, ...body] = tableRows;
@@ -361,12 +279,8 @@ function MarkdownRenderer({ content }: { content: string }) {
       continue;
     }
 
-    // Empty line
-    if (line.trim() === '') {
-      continue;
-    }
+    if (line.trim() === '') continue;
 
-    // Headings
     const headingMatch = line.match(/^(#{1,3})\s+(.*)/);
     if (headingMatch) {
       const level = headingMatch[1].length;
@@ -382,7 +296,6 @@ function MarkdownRenderer({ content }: { content: string }) {
       continue;
     }
 
-    // Blockquote
     if (line.startsWith('>')) {
       elements.push(
         <blockquote key={i} className="border-l-2 border-curi-pink pl-4 py-1 my-3 text-sm text-text-secondary italic">
@@ -392,7 +305,6 @@ function MarkdownRenderer({ content }: { content: string }) {
       continue;
     }
 
-    // List items
     if (/^[-*]\s/.test(line.trim())) {
       elements.push(
         <li key={i} className="text-sm text-text-primary ml-4 list-disc mb-1">
@@ -402,7 +314,6 @@ function MarkdownRenderer({ content }: { content: string }) {
       continue;
     }
 
-    // Numbered list
     if (/^\d+\.\s/.test(line.trim())) {
       elements.push(
         <li key={i} className="text-sm text-text-primary ml-4 list-decimal mb-1">
@@ -412,7 +323,6 @@ function MarkdownRenderer({ content }: { content: string }) {
       continue;
     }
 
-    // Checkbox
     if (/^- \[[ x]\]/.test(line.trim())) {
       const checked = line.includes('[x]');
       elements.push(
@@ -424,13 +334,11 @@ function MarkdownRenderer({ content }: { content: string }) {
       continue;
     }
 
-    // Horizontal rule
     if (/^---+$/.test(line.trim())) {
       elements.push(<hr key={i} className="border-border my-6" />);
       continue;
     }
 
-    // Paragraph
     elements.push(
       <p key={i} className="text-sm text-text-primary leading-relaxed mb-2">
         {processInline(line)}

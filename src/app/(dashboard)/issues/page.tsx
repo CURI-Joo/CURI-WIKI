@@ -6,7 +6,15 @@ import { useIssueStore } from '@/lib/issue-store';
 import { issueProjects } from '@/data/issue-projects';
 
 export default function IssuesPage() {
-  const { issues } = useIssueStore();
+  const { issues, loading } = useIssueStore();
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-3xl py-16 text-center">
+        <p className="text-sm text-text-muted">로딩 중...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

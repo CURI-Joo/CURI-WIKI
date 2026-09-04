@@ -3,23 +3,28 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { seedCategories } from '@/data/seed-categories';
-import { seedProfiles } from '@/data/seed-profiles';
-import { DocumentAccessSelector } from '@/components/documents/document-access-selector';
 import { updateStoredDocument, useDocumentStore } from '@/lib/document-store';
-import { getDocumentStatusLabel, getExternalStatusLabel } from '@/lib/document-labels';
 import { useState } from 'react';
 import { ArrowLeft, Save, Eye } from 'lucide-react';
 import Link from 'next/link';
-import type { DocStatus, Document, Visibility, ExternalStatus } from '@/types';
+import type { Document } from '@/types';
 
 export default function EditDocumentPage() {
   const { slug } = useParams<{ slug: string }>();
-  const { user } = useAuth();
-  const { documents, access } = useDocumentStore();
+  const { profile } = useAuth();
+  const { documents, loading } = useDocumentStore();
 
   const doc = documents.find((d) => d.slug === decodeURIComponent(slug));
 
-  if (!doc || !user) {
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto text-center py-20">
+        <p className="text-text-muted text-sm">로딩 중...</p>
+      </div>
+    );
+  }
+
+  if (!doc || !profile) {
     return (
       <div className="max-w-4xl mx-auto text-center py-20">
         <p className="text-text-secondary">글을 찾을 수 없습니다</p>
@@ -27,54 +32,42 @@ export default function EditDocumentPage() {
     );
   }
 
-  const allowedUserIds = access
-    .filter((entry) => entry.document_id === doc.id)
-    .map((entry) => entry.user_id);
-
-  return <EditForm doc={doc} initialAllowedUserIds={allowedUserIds} userId={user.id} />;
+  return <EditForm doc={doc} userId={profile.id} />;
 }
 
 function EditForm({
   doc,
-  initialAllowedUserIds,
   userId,
 }: {
   doc: Document;
-  initialAllowedUserIds: string[];
   userId: string;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState(doc.title);
   const [summary, setSummary] = useState(doc.summary);
   const [categoryId, setCategoryId] = useState(doc.category_id);
-  const [status, setStatus] = useState<DocStatus>(doc.status);
-  const [visibility, setVisibility] = useState<Visibility>(doc.visibility);
-  const [externalStatus, setExternalStatus] = useState<ExternalStatus>(doc.external_status);
-  const [allowedUserIds, setAllowedUserIds] = useState(initialAllowedUserIds);
   const [content, setContent] = useState(doc.content_markdown);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
-  const categories = seedCategories.filter((c) => c.slug !== 'home');
-
   const handleSave = async () => {
     setSaving(true);
-    const updated = updateStoredDocument(doc.id, {
-      title,
-      summary,
-      categoryId,
-      projectId: '',
-      status,
-      visibility,
-      externalStatus,
-      content,
-      userId,
-      allowedUserIds,
-    });
-    setSaving(false);
-    setSaved(true);
-    router.push(`/documents/${updated.slug}`);
+    try {
+      const updated = await updateStoredDocument(doc.id, {
+        title,
+        summary,
+        categoryId,
+        content,
+        userId,
+      });
+      setSaved(true);
+      router.push(`/documents/${updated.slug}`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '저장에 실패했습니다.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -99,52 +92,12 @@ function EditForm({
         className="w-full text-sm bg-transparent border-none text-text-secondary focus:outline-none"
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <div>
-          <label className="block text-xs text-text-muted mb-1">카테고리</label>
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none">
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-text-muted mb-1">상태</label>
-          <select value={status} onChange={(e) => setStatus(e.target.value as DocStatus)} className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none">
-            <option value="Draft">{getDocumentStatusLabel('Draft')}</option>
-            <option value="Published">{getDocumentStatusLabel('Published')}</option>
-            <option value="Archived">{getDocumentStatusLabel('Archived')}</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-text-muted mb-1">공개 범위</label>
-          <select
-            value={visibility}
-            onChange={(e) => {
-              const nextVisibility = e.target.value as Visibility;
-              setVisibility(nextVisibility);
-              if (nextVisibility === 'COMPANY') setAllowedUserIds([]);
-            }}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none"
-          >
-            <option value="COMPANY">전체 공개</option>
-            <option value="RESTRICTED">제한 공개</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-text-muted mb-1">외부 활용</label>
-          <select value={externalStatus} onChange={(e) => setExternalStatus(e.target.value as ExternalStatus)} className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none">
-            <option value="INTERNAL_ONLY">{getExternalStatusLabel('INTERNAL_ONLY')}</option>
-            <option value="REVIEW_REQUIRED">{getExternalStatusLabel('REVIEW_REQUIRED')}</option>
-            <option value="EXTERNAL_OK">{getExternalStatusLabel('EXTERNAL_OK')}</option>
-          </select>
-        </div>
+      <div className="max-w-xs">
+        <label className="block text-xs text-text-muted mb-1">카테고리</label>
+        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none">
+          {seedCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
       </div>
-
-      <DocumentAccessSelector
-        profiles={seedProfiles}
-        selectedUserIds={allowedUserIds}
-        visibility={visibility}
-        onChange={setAllowedUserIds}
-      />
 
       <div className="flex items-center gap-2 border-b border-border pb-2">
         <button onClick={() => setShowPreview(false)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!showPreview ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>

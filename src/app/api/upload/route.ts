@@ -3,11 +3,12 @@ import { isDemoMode } from '@/lib/demo-mode';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
-const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
-const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
-const ALLOWED_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES];
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
-const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
+import {
+  ALLOWED_TYPES,
+  MAX_FILE_SIZE,
+  MAX_IMAGE_SIZE,
+  maxSizeFor,
+} from '@/lib/upload-constraints';
 
 export async function POST(request: NextRequest) {
   if (isDemoMode()) {
@@ -69,15 +70,14 @@ export async function POST(request: NextRequest) {
 
   if (!ALLOWED_TYPES.includes(file.type)) {
     return NextResponse.json(
-      { error: '허용되지 않은 파일 형식입니다. (png, jpg, webp, gif, mp4, webm, mov)' },
+      { error: '허용되지 않은 파일 형식입니다. (이미지, 영상, 오디오, pdf, office, txt, csv, json, zip)' },
       { status: 400 }
     );
   }
 
-  const isVideo = file.type.startsWith('video/');
-  const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE;
+  const maxSize = maxSizeFor(file.type);
   if (file.size > maxSize) {
-    const limit = isVideo ? '100MB' : '10MB';
+    const limit = maxSize === MAX_IMAGE_SIZE ? '10MB' : `${MAX_FILE_SIZE / 1024 / 1024}MB`;
     return NextResponse.json(
       { error: `파일 크기가 ${limit}를 초과합니다.` },
       { status: 400 }

@@ -8,6 +8,7 @@ import { useDocumentStore } from '@/lib/document-store';
 import { useProfiles, getProfileName } from '@/lib/profiles-store';
 import { formatDate } from '@/lib/utils';
 import { MarkdownRenderer } from '@/components/documents/markdown-renderer';
+import { DocumentAttachments } from '@/components/documents/document-attachments';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -159,6 +160,13 @@ export default function DocumentDetailPage() {
         <div className="rounded-xl border border-border bg-surface p-6 md:p-8">
           <MarkdownRenderer content={doc.content_markdown} />
         </div>
+
+        {/* Attachments */}
+        <DocumentAttachments
+          documentId={doc.id}
+          userId={profile.id}
+          isAdmin={profile.role === 'admin'}
+        />
       </div>
 
       {/* Table of Contents - desktop */}

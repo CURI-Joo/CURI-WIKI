@@ -7,6 +7,7 @@ import { updateStoredDocument, useDocumentStore } from '@/lib/document-store';
 import { useRef, useState } from 'react';
 import { MarkdownImageUploadButton } from '@/components/documents/markdown-image-upload-button';
 import { MarkdownRenderer } from '@/components/documents/markdown-renderer';
+import { DocumentAttachments } from '@/components/documents/document-attachments';
 import { ArrowLeft, Save, Eye } from 'lucide-react';
 import Link from 'next/link';
 import type { Document } from '@/types';
@@ -34,15 +35,17 @@ export default function EditDocumentPage() {
     );
   }
 
-  return <EditForm doc={doc} userId={profile.id} />;
+  return <EditForm doc={doc} userId={profile.id} isAdmin={profile.role === 'admin'} />;
 }
 
 function EditForm({
   doc,
   userId,
+  isAdmin,
 }: {
   doc: Document;
   userId: string;
+  isAdmin: boolean;
 }) {
   const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -138,6 +141,8 @@ function EditForm({
           className="w-full min-h-[400px] p-4 rounded-xl border border-border bg-surface text-sm text-text-primary font-mono resize-y focus:outline-none focus:border-curi-pink/50"
         />
       )}
+
+      <DocumentAttachments documentId={doc.id} userId={userId} isAdmin={isAdmin} />
 
       <div className="flex items-center justify-between py-3">
         <span className="text-xs text-text-muted">{saving ? '저장 중...' : saved ? '저장 완료' : ''}</span>

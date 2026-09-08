@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import type { AccessLevel, Document, DocumentAccess } from '@/types';
+import type { AccessLevel, DocStatus, Document, DocumentAccess } from '@/types';
 import { demoDocumentAccess, demoDocuments } from '@/data/demo-data';
 import { isDemoMode } from '@/lib/demo-mode';
 import { createClient } from '@/lib/supabase/client';
@@ -22,6 +22,7 @@ interface CreateDocumentInput {
   categoryId: string;
   content: string;
   userId: string;
+  status?: DocStatus;
 }
 
 interface UpdateDocumentInput {
@@ -30,6 +31,7 @@ interface UpdateDocumentInput {
   categoryId: string;
   content: string;
   userId: string;
+  status?: DocStatus;
 }
 
 function isBrowser() {
@@ -188,6 +190,7 @@ export function getUserAccessibleDocIds(userId: string) {
 
 function createLocalStoredDocument(input: CreateDocumentInput): Document {
   const now = new Date().toISOString();
+  const status = input.status ?? 'Published';
   const document: Document = {
     id: createId('doc'),
     title: input.title.trim(),
@@ -196,14 +199,14 @@ function createLocalStoredDocument(input: CreateDocumentInput): Document {
     content_markdown: input.content,
     category_id: input.categoryId,
     owner_id: input.userId,
-    status: 'Published',
+    status,
     visibility: 'COMPANY',
     external_status: 'INTERNAL_ONLY',
     created_by: input.userId,
     updated_by: input.userId,
     created_at: now,
     updated_at: now,
-    published_at: now,
+    published_at: status === 'Published' ? now : null,
   };
 
   writeCustomDocuments([...getCustomDocuments(), document]);
@@ -219,6 +222,8 @@ function updateLocalStoredDocument(
 ): Document {
   const existing = getMergedDocuments().find((document) => document.id === documentId);
   if (!existing) throw new Error('Document not found');
+  const status = input.status ?? existing.status;
+  const now = new Date().toISOString();
 
   const updated: Document = {
     ...existing,
@@ -227,8 +232,15 @@ function updateLocalStoredDocument(
     summary: input.summary.trim(),
     content_markdown: input.content,
     category_id: input.categoryId,
+    status,
     updated_by: input.userId,
-    updated_at: new Date().toISOString(),
+    updated_at: now,
+    published_at:
+      status === 'Published'
+        ? existing.published_at ?? now
+        : status === 'Draft'
+          ? null
+          : existing.published_at,
   };
 
   writeCustomDocuments([
@@ -248,6 +260,8 @@ export async function createStoredDocument(
 
   const supabase = createClient();
   const slug = await createRemoteUniqueSlug(supabase, input.title);
+  const status = input.status ?? 'Published';
+  const now = new Date().toISOString();
 
   const { data, error } = await supabase
     .from('documents')
@@ -258,12 +272,12 @@ export async function createStoredDocument(
       content_markdown: input.content,
       category_id: input.categoryId,
       owner_id: input.userId,
-      status: 'Published',
+      status,
       visibility: 'COMPANY',
       external_status: 'INTERNAL_ONLY',
       created_by: input.userId,
       updated_by: input.userId,
-      published_at: new Date().toISOString(),
+      published_at: status === 'Published' ? now : null,
     })
     .select()
     .single();
@@ -280,6 +294,13 @@ export async function updateStoredDocument(
 
   const supabase = createClient();
   const slug = await createRemoteUniqueSlug(supabase, input.title, documentId);
+  const { data: existing } = await supabase
+    .from('documents')
+    .select('status, published_at')
+    .eq('id', documentId)
+    .single();
+  const status = input.status ?? ((existing as Pick<Document, 'status'> | null)?.status ?? 'Published');
+  const now = new Date().toISOString();
 
   const { data, error } = await supabase
     .from('documents')
@@ -289,8 +310,15 @@ export async function updateStoredDocument(
       summary: input.summary.trim(),
       content_markdown: input.content,
       category_id: input.categoryId,
+      status,
       updated_by: input.userId,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
+      published_at:
+        status === 'Published'
+          ? ((existing as Pick<Document, 'published_at'> | null)?.published_at ?? now)
+          : status === 'Draft'
+            ? null
+            : (existing as Pick<Document, 'published_at'> | null)?.published_at ?? null,
     })
     .eq('id', documentId)
     .select()

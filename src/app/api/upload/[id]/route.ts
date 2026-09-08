@@ -25,7 +25,7 @@ export async function GET(
   // Check approved status
   const { data: profile } = await supabase
     .from('profiles')
-    .select('status')
+    .select('status, role')
     .eq('id', user.id)
     .single();
 
@@ -37,12 +37,24 @@ export async function GET(
   const supabaseAdmin = getSupabaseAdmin();
   const { data: attachment, error } = await supabaseAdmin
     .from('attachments')
-    .select('storage_key, file_name, mime_type')
+    .select('storage_key, file_name, mime_type, document_id')
     .eq('id', id)
     .single();
 
   if (error || !attachment) {
     return NextResponse.json({ error: '첨부파일을 찾을 수 없습니다.' }, { status: 404 });
+  }
+
+  if (attachment.document_id) {
+    const { data: document } = await supabaseAdmin
+      .from('documents')
+      .select('category_id')
+      .eq('id', attachment.document_id)
+      .single();
+
+    if (document?.category_id === 'cat-secret' && profile.role !== 'admin') {
+      return NextResponse.json({ error: '접근 권한이 없습니다.' }, { status: 403 });
+    }
   }
 
   // Create signed URL (1 hour expiry)

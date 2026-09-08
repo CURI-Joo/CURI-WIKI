@@ -23,7 +23,7 @@ export async function GET(
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('status')
+    .select('status, role')
     .eq('id', user.id)
     .single();
 
@@ -32,6 +32,16 @@ export async function GET(
   }
 
   const supabaseAdmin = getSupabaseAdmin();
+
+  const { data: document } = await supabaseAdmin
+    .from('documents')
+    .select('category_id')
+    .eq('id', id)
+    .single();
+
+  if (document?.category_id === 'cat-secret' && profile.role !== 'admin') {
+    return NextResponse.json({ error: '접근 권한이 없습니다.' }, { status: 403 });
+  }
   const { data, error } = await supabaseAdmin
     .from('attachments')
     .select('id, document_id, issue_id, file_name, mime_type, file_size, uploaded_by, created_at, storage_key')

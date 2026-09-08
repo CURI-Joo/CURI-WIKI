@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import type { ReactNode } from 'react';
+import { Download, Paperclip } from 'lucide-react';
 
 type InlineMatch = {
   type: 'image' | 'code' | 'bold' | 'link';
@@ -38,6 +39,27 @@ function MarkdownImage({ alt, src }: { alt: string; src: string }) {
         className="max-h-[560px] w-full object-contain"
       />
     </span>
+  );
+}
+
+function isInlineAttachmentUrl(href: string) {
+  return /^\/api\/upload\/[^/]+\/file(\?.*)?$/.test(href);
+}
+
+function MarkdownAttachment({ label, href }: { label: string; href: string }) {
+  return (
+    <a
+      href={href}
+      className="my-2 flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary transition-colors hover:bg-surface-elevated"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        <Paperclip className="h-4 w-4 shrink-0 text-text-muted" />
+        <span className="truncate" title={label}>{label}</span>
+      </span>
+      <Download className="h-4 w-4 shrink-0 text-text-muted" />
+    </a>
   );
 }
 
@@ -102,6 +124,19 @@ export function MarkdownRenderer({ content }: { content: string }) {
         );
       } else if (first.type === 'link') {
         const href = first.match[2];
+
+        if (first.match[1].startsWith('📎 ') && isInlineAttachmentUrl(href)) {
+          parts.push(
+            <MarkdownAttachment
+              key={key++}
+              label={first.match[1].replace(/^📎\s+/, '').trim()}
+              href={href}
+            />
+          );
+          remaining = remaining.slice(idx + first.match[0].length);
+          continue;
+        }
+
         const isInternal = href.startsWith('/');
         parts.push(
           <a key={key++} href={href} className="text-curi-pink hover:underline" {...(!isInternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
@@ -183,6 +218,20 @@ export function MarkdownRenderer({ content }: { content: string }) {
     }
 
     if (line.trim() === '') continue;
+
+    const attachmentOnlyMatch = line
+      .trim()
+      .match(/^\[📎\s+([^\]]+)\]\((\/api\/upload\/[^)\s]+\/file(?:\?[^)\s]*)?)\)$/);
+    if (attachmentOnlyMatch) {
+      elements.push(
+        <MarkdownAttachment
+          key={`attachment-${i}`}
+          label={attachmentOnlyMatch[1].trim()}
+          href={attachmentOnlyMatch[2]}
+        />
+      );
+      continue;
+    }
 
     const headingMatch = line.match(/^(#{1,3})\s+(.*)/);
     if (headingMatch) {

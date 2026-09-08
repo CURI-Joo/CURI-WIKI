@@ -8,7 +8,6 @@ import { useDocumentStore } from '@/lib/document-store';
 import { useProfiles, getProfileName } from '@/lib/profiles-store';
 import { formatDate } from '@/lib/utils';
 import { MarkdownRenderer } from '@/components/documents/markdown-renderer';
-import { DocumentAttachments } from '@/components/documents/document-attachments';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -18,6 +17,7 @@ import {
   Link2,
   User,
 } from 'lucide-react';
+import { isSecretCategoryId } from '@/lib/permissions';
 
 export default function DocumentDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -46,6 +46,18 @@ export default function DocumentDetailPage() {
   }
 
   const doc = documents.find((d) => d.slug === decodeURIComponent(slug));
+
+  if (doc && isSecretCategoryId(doc.category_id) && profile.role !== 'admin') {
+    return (
+      <div className="max-w-4xl mx-auto text-center py-20">
+        <p className="text-text-secondary text-lg mb-2">접근 권한이 없습니다</p>
+        <p className="text-sm text-text-muted">Secret 문서는 관리자만 볼 수 있습니다.</p>
+        <Link href="/documents" className="text-curi-pink text-sm hover:underline inline-block mt-3">
+          전체 글로
+        </Link>
+      </div>
+    );
+  }
 
   if (!doc) {
     return (
@@ -161,12 +173,6 @@ export default function DocumentDetailPage() {
           <MarkdownRenderer content={doc.content_markdown} />
         </div>
 
-        {/* Attachments */}
-        <DocumentAttachments
-          documentId={doc.id}
-          userId={profile.id}
-          isAdmin={profile.role === 'admin'}
-        />
       </div>
 
       {/* Table of Contents - desktop */}

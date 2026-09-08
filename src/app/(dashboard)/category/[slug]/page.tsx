@@ -9,6 +9,7 @@ import { seedCategories } from '@/data/seed-categories';
 import { useAuth } from '@/lib/auth-context';
 import { useDocumentStore } from '@/lib/document-store';
 import { useProfiles } from '@/lib/profiles-store';
+import { isSecretCategoryId } from '@/lib/permissions';
 
 export default function CategoryPage({
   params,
@@ -28,6 +29,18 @@ export default function CategoryPage({
     return (
       <div className="mx-auto max-w-3xl py-20 text-center">
         <p className="text-text-muted">카테고리를 찾을 수 없습니다.</p>
+        <Link href="/home">
+          <Button variant="ghost" size="sm" className="mt-4">홈으로 돌아가기</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  if (isSecretCategoryId(category.id) && profile.role !== 'admin') {
+    return (
+      <div className="mx-auto max-w-3xl py-20 text-center">
+        <p className="text-text-secondary text-lg mb-2">접근 권한이 없습니다</p>
+        <p className="text-sm text-text-muted">Secret 카테고리는 관리자만 볼 수 있습니다.</p>
         <Link href="/home">
           <Button variant="ghost" size="sm" className="mt-4">홈으로 돌아가기</Button>
         </Link>

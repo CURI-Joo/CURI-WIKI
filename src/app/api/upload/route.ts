@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   // Check approved status
   const { data: profile } = await supabase
     .from('profiles')
-    .select('status')
+    .select('status, role')
     .eq('id', user.id)
     .single();
 
@@ -63,6 +63,20 @@ export async function POST(request: NextRequest) {
   const file = formData.get('file') as File | null;
   const issueId = formData.get('issue_id') as string | null;
   const documentId = formData.get('document_id') as string | null;
+
+  const supabaseAdmin = getSupabaseAdmin();
+
+  if (documentId) {
+    const { data: document } = await supabaseAdmin
+      .from('documents')
+      .select('category_id')
+      .eq('id', documentId)
+      .single();
+
+    if (document?.category_id === 'cat-secret' && profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Secret 문서에는 관리자만 첨부할 수 있습니다.' }, { status: 403 });
+    }
+  }
 
   if (!file) {
     return NextResponse.json({ error: '파일이 필요합니다.' }, { status: 400 });
@@ -88,8 +102,6 @@ export async function POST(request: NextRequest) {
   const ext = file.name.split('.').pop() || 'bin';
   const timestamp = Date.now();
   const storageKey = `${user.id}/${timestamp}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const supabaseAdmin = getSupabaseAdmin();
-
   // Upload to Supabase Storage using admin client
   const buffer = Buffer.from(await file.arrayBuffer());
   const { error: uploadError } = await supabaseAdmin.storage

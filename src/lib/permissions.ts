@@ -1,5 +1,19 @@
 import type { Profile, Document, ExternalStatus } from '@/types';
 
+export const SECRET_CATEGORY_ID = 'cat-secret';
+
+export function isSecretCategoryId(categoryId: string): boolean {
+  return categoryId === SECRET_CATEGORY_ID;
+}
+
+export function canAccessSecretCategory(
+  user: Pick<Profile, 'role' | 'status'>,
+  categoryId: string
+): boolean {
+  if (!isSecretCategoryId(categoryId)) return true;
+  return canViewAllDocuments(user);
+}
+
 /**
  * Pure functions for permission checks.
  * These are testable and used both on server and client.

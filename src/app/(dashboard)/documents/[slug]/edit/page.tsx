@@ -8,9 +8,11 @@ import { useRef, useState } from 'react';
 import { MarkdownImageUploadButton } from '@/components/documents/markdown-image-upload-button';
 import { MarkdownRenderer } from '@/components/documents/markdown-renderer';
 import { DocumentAttachments } from '@/components/documents/document-attachments';
+import { markdownToPlainText, plainTextToMarkdown } from '@/lib/plain-editor';
 import { ArrowLeft, Save, Eye } from 'lucide-react';
 import Link from 'next/link';
 import type { Document } from '@/types';
+import { isSecretCategoryId } from '@/lib/permissions';
 
 export default function EditDocumentPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -35,6 +37,15 @@ export default function EditDocumentPage() {
     );
   }
 
+  if (isSecretCategoryId(doc.category_id) && profile.role !== 'admin') {
+    return (
+      <div className="max-w-4xl mx-auto text-center py-20">
+        <p className="text-text-secondary text-lg mb-2">접근 권한이 없습니다</p>
+        <p className="text-sm text-text-muted">Secret 문서는 관리자만 수정할 수 있습니다.</p>
+      </div>
+    );
+  }
+
   return <EditForm doc={doc} userId={profile.id} isAdmin={profile.role === 'admin'} />;
 }
 
@@ -53,11 +64,22 @@ function EditForm({
   const [summary, setSummary] = useState(doc.summary);
   const [categoryId, setCategoryId] = useState(doc.category_id);
   const [content, setContent] = useState(doc.content_markdown);
+  const [plainContent, setPlainContent] = useState(() => markdownToPlainText(doc.content_markdown));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [editorMode, setEditorMode] = useState<'simple' | 'markdown'>('simple');
   const [showPreview, setShowPreview] = useState(false);
 
+  const categoryOptions = isAdmin
+    ? seedCategories
+    : seedCategories.filter((categoryItem) => !isSecretCategoryId(categoryItem.id));
+
   const handleSave = async () => {
+    if (!isAdmin && isSecretCategoryId(categoryId)) {
+      alert('Secret 카테고리는 관리자만 선택할 수 있습니다.');
+      return;
+    }
+
     setSaving(true);
     try {
       const updated = await updateStoredDocument(doc.id, {
@@ -74,6 +96,19 @@ function EditForm({
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSwitchToSimple = () => {
+    setEditorMode('simple');
+    setShowPreview(false);
+    setPlainContent(markdownToPlainText(content));
+  };
+
+  const handleSwitchToMarkdown = () => {
+    const nextMarkdown = plainTextToMarkdown(plainContent);
+    setContent(nextMarkdown);
+    setEditorMode('markdown');
+    setShowPreview(false);
   };
 
   return (
@@ -101,20 +136,23 @@ function EditForm({
       <div className="max-w-xs">
         <label className="block text-xs text-text-muted mb-1">카테고리</label>
         <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none">
-          {seedCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {categoryOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowPreview(false)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!showPreview ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>
+          <button onClick={handleSwitchToSimple} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!showPreview && editorMode === 'simple' ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>
+            간편 편집
+          </button>
+          <button onClick={handleSwitchToMarkdown} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!showPreview && editorMode === 'markdown' ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>
             Markdown
           </button>
           <button onClick={() => setShowPreview(true)} className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${showPreview ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>
             <Eye className="w-3.5 h-3.5" />미리보기
           </button>
         </div>
-        {!showPreview && (
+        {!showPreview && editorMode === 'markdown' && (
           <MarkdownImageUploadButton
             textareaRef={textareaRef}
             content={content}
@@ -133,6 +171,17 @@ function EditForm({
             <p className="text-sm text-text-muted">내용을 입력하면 미리보기가 표시됩니다.</p>
           )}
         </div>
+      ) : editorMode === 'simple' ? (
+        <textarea
+          value={plainContent}
+          onChange={(e) => {
+            const nextPlain = e.target.value;
+            setPlainContent(nextPlain);
+            setContent(plainTextToMarkdown(nextPlain));
+          }}
+          placeholder="문장 그대로 작성하세요. Markdown 문법 없이도 저장됩니다."
+          className="w-full min-h-[400px] p-4 rounded-xl border border-border bg-surface text-sm text-text-primary placeholder:text-text-muted resize-y focus:outline-none focus:border-curi-pink/50"
+        />
       ) : (
         <textarea
           ref={textareaRef}

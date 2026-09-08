@@ -9,6 +9,7 @@ import { useProfiles } from '@/lib/profiles-store';
 import Link from 'next/link';
 import { useState, Suspense } from 'react';
 import { FileText, Plus, Search } from 'lucide-react';
+import { isSecretCategoryId } from '@/lib/permissions';
 
 function DocumentsContent() {
   const { profile } = useAuth();
@@ -28,14 +29,25 @@ function DocumentsContent() {
     );
   }
 
-  let docs = [...documents];
+  let docs = documents.filter(
+    (doc) => profile.role === 'admin' || !isSecretCategoryId(doc.category_id)
+  );
 
   const category = categorySlug
     ? seedCategories.find((c) => c.slug === categorySlug)
     : null;
+  const resolvedCategory =
+    category && profile.role !== 'admin' && isSecretCategoryId(category.id)
+      ? null
+      : category;
 
-  if (category) {
-    docs = docs.filter((d) => d.category_id === category.id);
+  const categoryFilters = seedCategories
+    .filter((categoryItem) => profile.role === 'admin' || !isSecretCategoryId(categoryItem.id))
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order);
+
+  if (resolvedCategory) {
+    docs = docs.filter((d) => d.category_id === resolvedCategory.id);
   }
 
   if (search) {
@@ -54,7 +66,7 @@ function DocumentsContent() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-text-primary">
-            {category ? category.name : '전체 글'}
+            {resolvedCategory ? resolvedCategory.name : '전체 글'}
           </h1>
           <p className="text-sm text-text-secondary mt-1">
             {docs.length}개의 글
@@ -78,6 +90,32 @@ function DocumentsContent() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary placeholder:text-text-muted focus:border-curi-pink/50 focus:outline-none"
         />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href="/documents"
+          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+            !resolvedCategory
+              ? 'bg-curi-pink-soft text-curi-pink'
+              : 'bg-surface text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+          }`}
+        >
+          전체
+        </Link>
+        {categoryFilters.map((item) => (
+          <Link
+            key={item.id}
+            href={`/documents?category=${item.slug}`}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              resolvedCategory?.slug === item.slug
+                ? 'bg-curi-pink-soft text-curi-pink'
+                : 'bg-surface text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+            }`}
+          >
+            {item.name}
+          </Link>
+        ))}
       </div>
 
       {docs.length === 0 ? (

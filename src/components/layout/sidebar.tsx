@@ -7,6 +7,8 @@ import { usePathname } from 'next/navigation';
 import {
   Home,
   Bot,
+  FolderKanban,
+  Shield,
   MessageSquare,
   MoreHorizontal,
   AlertCircle,
@@ -77,6 +79,10 @@ export function Sidebar() {
 
   const subCategories = [
     { label: 'CURI AI', icon: Bot, href: '/category/curi-ai' },
+    { label: 'Projects', icon: FolderKanban, href: '/category/projects' },
+    ...(profile?.role === 'admin'
+      ? [{ label: 'Secret', icon: Shield, href: '/category/secret' }]
+      : []),
     { label: 'ETC', icon: MoreHorizontal, href: '/category/etc' },
     { label: 'WAME', icon: MessageSquare, href: '/category/wame' },
   ];

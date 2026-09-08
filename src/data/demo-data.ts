@@ -76,7 +76,7 @@ export const demoDocuments: Document[] = [
 
 1. 공유해야 할 정보가 생기면 일회성 대화인지 계속 참고할 정보인지 판단합니다.
 2. 계속 참고할 정보라면 Wiki 문서로 남깁니다.
-3. CURI AI, WAME, ETC 중 가장 맞는 카테고리를 선택합니다.
+3. CURI AI, Projects, Secret, WAME, ETC 중 가장 맞는 카테고리를 선택합니다.
 4. 제목과 요약은 나중에 검색하기 쉬운 표현으로 작성합니다.
 5. 내용이 바뀌면 기존 문서를 수정해 최신 상태를 유지합니다.`,
     category_id: 'cat-etc',
@@ -122,6 +122,123 @@ ISSUE는 제품에서 발견된 문제와 개선사항을 등록하고, 해결 �
     created_at: '2026-09-03T11:00:00Z',
     updated_at: '2026-09-03T11:00:00Z',
     published_at: '2026-09-03T11:00:00Z',
+  },
+  {
+    id: 'doc-secret-drive-index',
+    title: 'Secret · 회사 내부자료 드라이브 인덱스',
+    slug: 'secret-drive-index',
+    summary: 'Google Drive 06. 디자인 폴더 기준으로 내부 브랜드/명함/인쇄물 파일을 정리한 인덱스',
+    content_markdown: `# Secret · 회사 내부자료 드라이브 인덱스
+
+> 내부 전용 문서입니다. 외부 공유 금지.
+
+## 원본 위치
+
+- Google Drive 폴더: [06. 디자인](https://drive.google.com/drive/folders/1CiS365f19Oa-goFyVEIoj4T3vynbNDDV)
+- 로컬 인덱스: \`google-drive/06. 디자인/MANIFEST.md\`
+
+## CURI 브랜드 로고 (핵심)
+
+- [curi-lockup-1-equal-grid.svg](https://drive.google.com/file/d/16MYTJ24_I1oo4O4c5QZ-OnzIrR-JE0xk/view)
+- [curi-symbol-flat.svg](https://drive.google.com/file/d/1Tw1XQgDgEXnAjhenrxYrnQZduTDaQhL_/view)
+- [260904_CuriAI_Logo.ai](https://drive.google.com/file/d/19PEfebiO2nq47WotTR9JtaK9iqsAtG2v/view)
+- [앞에 동그라미붙은curi ai 로고.ai](https://drive.google.com/file/d/1_OK-1u8P0yihHE-caQgz20ApzR3U58bZ/view)
+
+## WAME 로고 (핵심)
+
+- [wame-lockup-mosaic.ai](https://drive.google.com/file/d/1u2z0SKALduIDnaZ2gYEoQqBMNM1Kx9ir/view)
+- [wame/wame_symbol_logo.png](https://drive.google.com/file/d/18ZOplbXKtkOifQMhH_dAyi5KEPcSmOmx/view)
+- [wame/NEW_WAME_LOGO.png](https://drive.google.com/file/d/1dca8WTPm6jzTt4xjrK7HHh928OyAT9ja/view)
+
+## 명함/인쇄물
+
+- [명함/static.zip](https://drive.google.com/file/d/1650xvbouRRsF_lvt5AXcwEfajPvsVnPV/view)
+- [260820_제시 명함 도트로고.ai](https://drive.google.com/file/d/13QuMegFMnSqxXJYq03_8lMMSHVvATBuX/view)
+- [LOGOPRINT_WAME_PU_CURIAI_DTF.ai](https://drive.google.com/file/d/1Tb69Itj1gxo2oT1TccqRq91mi7f_gAmT/view)
+
+## 대용량 미디어
+
+- [CuriDemo_IR.mp4](https://drive.google.com/file/d/1Ei4DmfdZnezLQHAAp-9z8aVsZ1p9V5eA/view)
+- [가로데모.mp4](https://drive.google.com/file/d/1zGtt7QxcxvVii9xnuSHGEqckGL-dTA8B/view)
+- [사진_블랙후즈(이은호 대표) 폴더](https://drive.google.com/drive/folders/1j_J9JXfONRQMG3nKWQksz4qXX_5bfgiE)
+
+## 운영 원칙
+
+- 이 문서/폴더는 내부 구성원만 접근합니다.
+- 외부 전달 시에는 사본을 만들어 민감정보를 제거한 뒤 공유합니다.
+- 드라이브 원본 변경 시 이 문서와 \`MANIFEST.md\`를 함께 갱신합니다.
+`,
+    category_id: 'cat-secret',
+    owner_id: 'user-minjoo',
+    status: 'Published',
+    visibility: 'RESTRICTED',
+    external_status: 'INTERNAL_ONLY',
+    created_by: 'user-minjoo',
+    updated_by: 'user-minjoo',
+    created_at: '2026-09-08T08:10:00Z',
+    updated_at: '2026-09-08T08:10:00Z',
+    published_at: '2026-09-08T08:10:00Z',
+  },
+  {
+    id: 'doc-project-template',
+    title: '프로젝트 템플릿 (복사해서 사용)',
+    slug: 'project-template',
+    summary: 'B2B 프로젝트 진행 기록을 표준 형식으로 정리하기 위한 템플릿',
+    content_markdown: `# 프로젝트 개요
+
+## 기본 정보
+
+- 프로젝트명:
+- 진행 기간:
+- 고객/도메인:
+- 담당자:
+
+## 배경과 목표
+
+- 시작 배경:
+- 해결하려는 문제:
+- 성공 기준(KPI):
+
+## 범위와 주요 기능
+
+1. 핵심 기능 1
+2. 핵심 기능 2
+3. 핵심 기능 3
+
+## 기술/아키텍처
+
+- 기술 스택:
+- 구조 요약:
+- 외부 연동:
+
+## 진행 기록
+
+- 주요 의사결정:
+- 이슈와 대응:
+- 일정 리스크:
+
+## 결과 및 회고
+
+- 정량 성과:
+- 정성 성과:
+- 배운 점:
+
+## 후속 과제
+
+- [ ] 개선 과제 1
+- [ ] 개선 과제 2
+- [ ] 운영 전환 체크
+`,
+    category_id: 'cat-projects',
+    owner_id: 'user-minjoo',
+    status: 'Published',
+    visibility: 'COMPANY',
+    external_status: 'INTERNAL_ONLY',
+    created_by: 'user-minjoo',
+    updated_by: 'user-minjoo',
+    created_at: '2026-09-08T05:00:00Z',
+    updated_at: '2026-09-08T05:00:00Z',
+    published_at: '2026-09-08T05:00:00Z',
   },
   {
     id: 'doc-design-guide',

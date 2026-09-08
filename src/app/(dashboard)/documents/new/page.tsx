@@ -7,8 +7,61 @@ import { seedCategories } from '@/data/seed-categories';
 import { createStoredDocument } from '@/lib/document-store';
 import { MarkdownImageUploadButton } from '@/components/documents/markdown-image-upload-button';
 import { MarkdownRenderer } from '@/components/documents/markdown-renderer';
+import { markdownToPlainText, plainTextToMarkdown } from '@/lib/plain-editor';
 import { ArrowLeft, Save, Eye } from 'lucide-react';
 import Link from 'next/link';
+import { isSecretCategoryId } from '@/lib/permissions';
+
+const PROJECT_TEMPLATE = {
+  title: '[Project] 프로젝트명',
+  summary: '프로젝트 목적, 성과, 핵심 내용을 한 줄로 정리',
+  categorySlug: 'projects',
+  content: `# 프로젝트 개요
+
+## 기본 정보
+
+- 프로젝트명:
+- 진행 기간:
+- 고객/도메인:
+- 담당자:
+
+## 배경과 목표
+
+- 왜 시작했는지
+- 해결하려는 문제
+- 성공 기준(KPI)
+
+## 범위와 주요 기능
+
+1. 핵심 기능 1
+2. 핵심 기능 2
+3. 핵심 기능 3
+
+## 기술/아키텍처
+
+- 기술 스택:
+- 구조 요약:
+- 연동 시스템:
+
+## 진행 과정
+
+- 주요 의사결정:
+- 이슈와 대응:
+- 일정 리스크:
+
+## 결과
+
+- 정량 성과:
+- 정성 성과:
+- 배운 점:
+
+## 후속 과제
+
+- [ ] 개선 과제 1
+- [ ] 개선 과제 2
+- [ ] 운영 전환 체크
+`,
+};
 
 export default function NewDocumentPage() {
   const { profile } = useAuth();
@@ -19,14 +72,25 @@ export default function NewDocumentPage() {
   const [summary, setSummary] = useState('');
   const [categoryId, setCategoryId] = useState(seedCategories[0]?.id ?? '');
   const [content, setContent] = useState('');
+  const [plainContent, setPlainContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [editorMode, setEditorMode] = useState<'simple' | 'markdown'>('simple');
   const [showPreview, setShowPreview] = useState(false);
+
+  const categoryOptions = profile.role === 'admin'
+    ? seedCategories
+    : seedCategories.filter((categoryItem) => !isSecretCategoryId(categoryItem.id));
 
   if (!profile) return null;
 
   const handleSave = async () => {
     if (!title.trim()) return;
+    if (profile.role !== 'admin' && isSecretCategoryId(categoryId)) {
+      alert('Secret 카테고리는 관리자만 선택할 수 있습니다.');
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -45,6 +109,37 @@ export default function NewDocumentPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleApplyProjectTemplate = () => {
+    const projectCategory = seedCategories.find((category) => category.slug === PROJECT_TEMPLATE.categorySlug);
+
+    setTitle((prev) => prev.trim() ? prev : PROJECT_TEMPLATE.title);
+    setSummary((prev) => prev.trim() ? prev : PROJECT_TEMPLATE.summary);
+    if (projectCategory) {
+      setCategoryId(projectCategory.id);
+    }
+    setContent((prev) => {
+      if (prev.trim()) return prev;
+      const templateContent = PROJECT_TEMPLATE.content;
+      if (editorMode === 'simple') {
+        setPlainContent(markdownToPlainText(templateContent));
+      }
+      return templateContent;
+    });
+  };
+
+  const handleSwitchToSimple = () => {
+    setEditorMode('simple');
+    setShowPreview(false);
+    setPlainContent(markdownToPlainText(content));
+  };
+
+  const handleSwitchToMarkdown = () => {
+    const nextMarkdown = plainTextToMarkdown(plainContent);
+    setContent(nextMarkdown);
+    setEditorMode('markdown');
+    setShowPreview(false);
   };
 
   return (
@@ -85,19 +180,37 @@ export default function NewDocumentPage() {
           onChange={(e) => setCategoryId(e.target.value)}
           className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none focus:border-curi-pink/50"
         >
-          {seedCategories.map((c) => (
+          {categoryOptions.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleApplyProjectTemplate}
+          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary"
+        >
+          프로젝트 템플릿 채우기
+        </button>
       </div>
 
       {/* Editor toggle */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowPreview(false)}
+            onClick={handleSwitchToSimple}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              !showPreview ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'
+              !showPreview && editorMode === 'simple' ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            간편 편집
+          </button>
+          <button
+            onClick={handleSwitchToMarkdown}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              !showPreview && editorMode === 'markdown' ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'
             }`}
           >
             Markdown
@@ -112,7 +225,7 @@ export default function NewDocumentPage() {
             미리보기
           </button>
         </div>
-        {!showPreview && (
+        {!showPreview && editorMode === 'markdown' && (
           <MarkdownImageUploadButton
             textareaRef={textareaRef}
             content={content}
@@ -131,6 +244,17 @@ export default function NewDocumentPage() {
             <p className="text-sm text-text-muted">내용을 입력하면 미리보기가 표시됩니다.</p>
           )}
         </div>
+      ) : editorMode === 'simple' ? (
+        <textarea
+          value={plainContent}
+          onChange={(e) => {
+            const nextPlain = e.target.value;
+            setPlainContent(nextPlain);
+            setContent(plainTextToMarkdown(nextPlain));
+          }}
+          placeholder="문장 그대로 작성하세요. Markdown 문법 없이도 저장됩니다."
+          className="w-full min-h-[400px] p-4 rounded-xl border border-border bg-surface text-sm text-text-primary placeholder:text-text-muted resize-y focus:outline-none focus:border-curi-pink/50"
+        />
       ) : (
         <textarea
           ref={textareaRef}

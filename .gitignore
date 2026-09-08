@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Claude Code 로컬 설정
 .claude/
+
+# Google Drive 사본 (커밋하지 않음)
+google-drive/

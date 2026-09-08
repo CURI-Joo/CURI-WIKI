@@ -11,6 +11,7 @@ export type AccessLevel = 'VIEW' | 'EDIT';
 export type CategorySlug =
   | 'home'
   | 'projects'
+  | 'secret'
   | 'product'
   | 'tech-llm'
   | 'engineering'

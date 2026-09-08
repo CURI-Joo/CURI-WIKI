@@ -67,11 +67,13 @@ export async function POST(request: NextRequest) {
   const supabaseAdmin = getSupabaseAdmin();
 
   if (documentId) {
-    const { data: document } = await supabaseAdmin
+    const { data: documentData } = await supabaseAdmin
       .from('documents')
       .select('category_id')
       .eq('id', documentId)
       .single();
+
+    const document = documentData as { category_id: string | null } | null;
 
     if (document?.category_id === 'cat-secret' && profile.role !== 'admin') {
       return NextResponse.json({ error: 'Secret 문서에는 관리자만 첨부할 수 있습니다.' }, { status: 403 });

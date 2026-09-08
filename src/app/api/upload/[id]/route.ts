@@ -46,11 +46,13 @@ export async function GET(
   }
 
   if (attachment.document_id) {
-    const { data: document } = await supabaseAdmin
+    const { data: documentData } = await supabaseAdmin
       .from('documents')
       .select('category_id')
       .eq('id', attachment.document_id)
       .single();
+
+    const document = documentData as { category_id: string | null } | null;
 
     if (document?.category_id === 'cat-secret' && profile.role !== 'admin') {
       return NextResponse.json({ error: '접근 권한이 없습니다.' }, { status: 403 });

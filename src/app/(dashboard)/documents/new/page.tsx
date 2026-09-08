@@ -78,11 +78,11 @@ export default function NewDocumentPage() {
   const [editorMode, setEditorMode] = useState<'simple' | 'markdown'>('simple');
   const [showPreview, setShowPreview] = useState(false);
 
+  if (!profile) return null;
+
   const categoryOptions = profile.role === 'admin'
     ? seedCategories
     : seedCategories.filter((categoryItem) => !isSecretCategoryId(categoryItem.id));
-
-  if (!profile) return null;
 
   const handleSave = async () => {
     if (!title.trim()) return;

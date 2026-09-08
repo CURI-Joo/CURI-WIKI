@@ -86,13 +86,15 @@ export interface DocumentAccess {
 
 export interface Attachment {
   id: string;
-  document_id: string;
+  issue_id: string | null;
+  document_id: string | null;
   storage_key: string;
   file_name: string;
   mime_type: string;
   file_size: number;
   uploaded_by: string;
   created_at: string;
+  download_url?: string | null;
 }
 
 export interface DocumentRevision {

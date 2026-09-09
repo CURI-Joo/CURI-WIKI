@@ -34,6 +34,10 @@ interface UpdateDocumentInput {
   status?: DocStatus;
 }
 
+interface DeleteDocumentInput {
+  userId: string;
+}
+
 function isBrowser() {
   return typeof window !== 'undefined';
 }
@@ -253,6 +257,22 @@ function updateLocalStoredDocument(
   return updated;
 }
 
+function deleteLocalStoredDocument(
+  documentId: string,
+  _input: DeleteDocumentInput
+) {
+  const exists = getMergedDocuments().some((document) => document.id === documentId);
+  if (!exists) throw new Error('Document not found');
+
+  writeCustomDocuments(
+    getCustomDocuments().filter((document) => document.id !== documentId)
+  );
+  writeCustomAccess(
+    getCustomAccess().filter((access) => access.document_id !== documentId)
+  );
+  emitStoreChange();
+}
+
 export async function createStoredDocument(
   input: CreateDocumentInput
 ): Promise<Document> {
@@ -326,6 +346,25 @@ export async function updateStoredDocument(
 
   if (error) throw new Error(error.message);
   return data as Document;
+}
+
+export async function deleteStoredDocument(
+  documentId: string,
+  input: DeleteDocumentInput
+): Promise<void> {
+  if (isDemoMode()) {
+    deleteLocalStoredDocument(documentId, input);
+    return;
+  }
+
+  const response = await fetch(`/api/documents/${encodeURIComponent(documentId)}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(payload?.error ?? '문서 삭제에 실패했습니다.');
+  }
 }
 
 export function useDocumentStore() {

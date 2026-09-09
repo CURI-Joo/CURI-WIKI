@@ -1,10 +1,10 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { seedCategories } from '@/data/seed-categories';
-import { useDocumentStore } from '@/lib/document-store';
+import { deleteStoredDocument, useDocumentStore } from '@/lib/document-store';
 import { useProfiles, getProfileName } from '@/lib/profiles-store';
 import { formatDate } from '@/lib/utils';
 import { MarkdownRenderer } from '@/components/documents/markdown-renderer';
@@ -15,16 +15,19 @@ import {
   Check,
   Edit3,
   Link2,
+  Trash2,
   User,
 } from 'lucide-react';
 import { isSecretCategoryId } from '@/lib/permissions';
 
 export default function DocumentDetailPage() {
   const { slug } = useParams<{ slug: string }>();
+  const router = useRouter();
   const { profile } = useAuth();
   const { documents, loading } = useDocumentStore();
   const profiles = useProfiles();
   const [linkCopied, setLinkCopied] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -101,6 +104,28 @@ export default function DocumentDetailPage() {
     }
   };
 
+  const canDelete = profile.role === 'admin' || doc.owner_id === profile.id;
+
+  const handleDelete = async () => {
+    if (!canDelete || deleting) return;
+
+    const confirmed = window.confirm(
+      '정말 이 문서를 삭제할까요?\n문서 본문과 첨부파일이 함께 삭제됩니다.'
+    );
+
+    if (!confirmed) return;
+
+    setDeleting(true);
+
+    try {
+      await deleteStoredDocument(doc.id, { userId: profile.id });
+      router.push('/documents');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '문서 삭제에 실패했습니다.');
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto flex gap-8">
       {/* Main content */}
@@ -153,6 +178,17 @@ export default function DocumentDetailPage() {
             <Edit3 className="w-3.5 h-3.5" />
             내용 수정
           </Link>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 text-red-600 text-sm font-medium transition-colors hover:bg-red-50 disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {deleting ? '삭제 중...' : '삭제'}
+            </button>
+          )}
           <button
             type="button"
             onClick={handleCopyLink}

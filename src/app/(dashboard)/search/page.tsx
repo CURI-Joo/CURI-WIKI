@@ -2,27 +2,53 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { getRepository } from '@/lib/repository';
+import { useDocumentStore } from '@/lib/document-store';
+import { seedCategories } from '@/data/seed-categories';
 import Link from 'next/link';
 import { Search, FileText } from 'lucide-react';
 import type { SearchResult } from '@/types';
+import { isSecretCategoryId } from '@/lib/permissions';
+import { normalizeCategoryId } from '@/lib/category-migration';
 
 export default function SearchPage() {
   const { profile } = useAuth();
+  const { documents, loading } = useDocumentStore();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
+  const isAdmin = profile?.role === 'admin';
 
-  if (!profile) return null;
+  if (loading) {
+    return (
+      <div className="max-w-3xl mx-auto space-y-6 py-4">
+        <h1 className="text-xl font-bold text-text-primary">검색</h1>
+        <p className="text-sm text-text-muted">로딩 중...</p>
+      </div>
+    );
+  }
 
   const handleSearch = async () => {
     if (!query.trim()) return;
     setSearching(true);
     try {
-      const repo = getRepository();
-      const res = await repo.search(query, profile.id);
-      setResults(res);
+      const normalizedQuery = query.trim().toLowerCase();
+      const visibleDocuments = documents.filter((document) => isAdmin || !isSecretCategoryId(document.category_id));
+
+      const nextResults = visibleDocuments
+        .filter((document) => [document.title, document.summary, document.content_markdown]
+          .some((value) => value.toLowerCase().includes(normalizedQuery)))
+        .slice(0, 20)
+        .map((document): SearchResult => ({
+          type: 'document',
+          id: document.id,
+          title: document.title,
+          summary: document.summary,
+          slug: document.slug,
+          category: seedCategories.find((category) => category.id === normalizeCategoryId(document.category_id))?.name,
+        }));
+
+      setResults(nextResults);
       setSearched(true);
     } finally {
       setSearching(false);

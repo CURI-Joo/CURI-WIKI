@@ -13,7 +13,7 @@ export default function HomePage() {
   const { profile } = useAuth();
   const { documents, loading } = useDocumentStore();
   const profiles = useProfiles();
-  if (!profile) return null;
+  const isAdmin = profile?.role === 'admin';
 
   if (loading) {
     return (
@@ -24,7 +24,7 @@ export default function HomePage() {
   }
 
   const docs = documents
-    .filter((doc) => profile.role === 'admin' || !isSecretCategoryId(doc.category_id))
+    .filter((doc) => isAdmin || !isSecretCategoryId(doc.category_id))
     .sort(
       (a, b) =>
         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()

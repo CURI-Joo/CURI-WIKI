@@ -11,7 +11,7 @@ export default function RootRedirect() {
   useEffect(() => {
     if (loading) return;
     if (!session) {
-      router.replace('/login');
+      router.replace('/home');
     } else if (profile?.status === 'approved') {
       router.replace('/tools');
     } else if (profile?.status === 'pending') {

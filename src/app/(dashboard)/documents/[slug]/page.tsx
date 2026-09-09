@@ -39,8 +39,6 @@ export default function DocumentDetailPage() {
     };
   }, []);
 
-  if (!profile) return null;
-
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto text-center py-20">
@@ -51,7 +49,7 @@ export default function DocumentDetailPage() {
 
   const doc = documents.find((d) => d.slug === decodeURIComponent(slug));
 
-  if (doc && isSecretCategoryId(doc.category_id) && profile.role !== 'admin') {
+  if (doc && isSecretCategoryId(doc.category_id) && profile?.role !== 'admin') {
     return (
       <div className="max-w-4xl mx-auto text-center py-20">
         <p className="text-text-secondary text-lg mb-2">접근 권한이 없습니다</p>
@@ -105,10 +103,10 @@ export default function DocumentDetailPage() {
     }
   };
 
-  const canDelete = profile.role === 'admin' || doc.owner_id === profile.id;
+  const canDelete = Boolean(profile && (profile.role === 'admin' || doc.owner_id === profile.id));
 
   const handleDelete = async () => {
-    if (!canDelete || deleting) return;
+    if (!canDelete || deleting || !profile) return;
 
     const confirmed = window.confirm(
       '정말 이 문서를 삭제할까요?\n문서 본문과 첨부파일이 함께 삭제됩니다.'
@@ -173,11 +171,11 @@ export default function DocumentDetailPage() {
         {/* Actions */}
         <div className="flex items-center gap-2">
           <Link
-            href={`/documents/${doc.slug}/edit`}
+            href={profile ? `/documents/${doc.slug}/edit` : '/login'}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-curi-pink hover:bg-curi-pink-hover text-white text-sm font-medium transition-colors"
           >
             <Edit3 className="w-3.5 h-3.5" />
-            내용 수정
+            {profile ? '내용 수정' : '로그인 후 수정'}
           </Link>
           {canDelete && (
             <button

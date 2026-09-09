@@ -22,8 +22,7 @@ export default function CategoryPage({
   const { profile } = useAuth();
   const { documents, loading } = useDocumentStore();
   const profiles = useProfiles();
-
-  if (!profile) return null;
+  const isAdmin = profile?.role === 'admin';
 
   const category = seedCategories.find((c) => c.slug === resolvedSlug);
 
@@ -38,7 +37,7 @@ export default function CategoryPage({
     );
   }
 
-  if (isSecretCategoryId(category.id) && profile.role !== 'admin') {
+  if (isSecretCategoryId(category.id) && !isAdmin) {
     return (
       <div className="mx-auto max-w-3xl py-20 text-center">
         <p className="text-text-secondary text-lg mb-2">접근 권한이 없습니다</p>

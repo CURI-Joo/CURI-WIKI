@@ -17,19 +17,24 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const isToolsLanding = pathname === '/tools';
+  const requiresAuth =
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/issues') ||
+    pathname === '/documents/new' ||
+    (pathname.startsWith('/documents/') && pathname.endsWith('/edit'));
 
   useEffect(() => {
     if (loading) return;
-    if (!session) {
+    if (!session && requiresAuth) {
       router.push('/login');
       return;
     }
-    if (profile?.status === 'pending') {
+    if (session && profile?.status === 'pending' && requiresAuth) {
       router.push('/pending');
-    } else if (profile?.status === 'rejected') {
+    } else if (session && profile?.status === 'rejected' && requiresAuth) {
       router.push('/rejected');
     }
-  }, [session, profile, loading, router]);
+  }, [session, profile, loading, router, requiresAuth]);
 
   // Global Cmd+K / Ctrl+K handler
   useEffect(() => {
@@ -51,7 +56,8 @@ export default function DashboardLayout({
     setCommandPaletteOpen(false);
   }, []);
 
-  if (loading || !session || profile?.status !== 'approved') return null;
+  if (loading) return null;
+  if (requiresAuth && (!session || profile?.status !== 'approved')) return null;
 
   return (
     <div className="flex h-screen overflow-hidden">

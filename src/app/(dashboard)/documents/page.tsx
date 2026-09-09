@@ -21,7 +21,7 @@ function DocumentsContent() {
   const categorySlug = categorySlugParam ? normalizeCategorySlug(categorySlugParam) : null;
   const [search, setSearch] = useState('');
 
-  if (!profile) return null;
+  const isAdmin = profile?.role === 'admin';
 
   if (loading) {
     return (
@@ -32,19 +32,19 @@ function DocumentsContent() {
   }
 
   let docs = documents.filter(
-    (doc) => profile.role === 'admin' || !isSecretCategoryId(doc.category_id)
+    (doc) => isAdmin || !isSecretCategoryId(doc.category_id)
   );
 
   const category = categorySlug
     ? seedCategories.find((c) => c.slug === categorySlug)
     : null;
   const resolvedCategory =
-    category && profile.role !== 'admin' && isSecretCategoryId(category.id)
+    category && !isAdmin && isSecretCategoryId(category.id)
       ? null
       : category;
 
   const categoryFilters = seedCategories
-    .filter((categoryItem) => profile.role === 'admin' || !isSecretCategoryId(categoryItem.id))
+    .filter((categoryItem) => isAdmin || !isSecretCategoryId(categoryItem.id))
     .slice()
     .sort((a, b) => a.sort_order - b.sort_order);
 

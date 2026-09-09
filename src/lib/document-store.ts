@@ -39,6 +39,13 @@ interface DeleteDocumentInput {
   userId: string;
 }
 
+function normalizeDocuments(documents: Document[]) {
+  return documents.map((document) => ({
+    ...document,
+    category_id: normalizeCategoryId(document.category_id),
+  }));
+}
+
 function isBrowser() {
   return typeof window !== 'undefined';
 }
@@ -388,17 +395,19 @@ export function useDocumentStore() {
     }
 
     const supabase = createClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('documents')
       .select('*')
       .order('updated_at', { ascending: false });
-    setState({
-      documents: ((data ?? []) as Document[]).map((document) => ({
-        ...document,
-        category_id: normalizeCategoryId(document.category_id),
-      })),
-      loading: false,
-    });
+
+    if (error || !data) {
+      const response = await fetch('/api/wiki/public-documents', { cache: 'no-store' });
+      const payload = await response.json().catch(() => null) as { documents?: Document[] } | null;
+      setState({ documents: normalizeDocuments(payload?.documents ?? []), loading: false });
+      return;
+    }
+
+    setState({ documents: normalizeDocuments((data ?? []) as Document[]), loading: false });
   }, [isDemo]);
 
   useEffect(() => {
@@ -407,19 +416,23 @@ export function useDocumentStore() {
 
       async function loadDocuments() {
         const supabase = createClient();
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('documents')
           .select('*')
           .order('updated_at', { ascending: false });
 
+        if (error || !data) {
+          const response = await fetch('/api/wiki/public-documents', { cache: 'no-store' });
+          const payload = await response.json().catch(() => null) as { documents?: Document[] } | null;
+
+          if (!cancelled) {
+            setState({ documents: normalizeDocuments(payload?.documents ?? []), loading: false });
+          }
+          return;
+        }
+
         if (!cancelled) {
-          setState({
-            documents: ((data ?? []) as Document[]).map((document) => ({
-              ...document,
-              category_id: normalizeCategoryId(document.category_id),
-            })),
-            loading: false,
-          });
+          setState({ documents: normalizeDocuments((data ?? []) as Document[]), loading: false });
         }
       }
 

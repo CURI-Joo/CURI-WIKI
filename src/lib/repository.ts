@@ -9,6 +9,7 @@ import { seedCategories } from '@/data/seed-categories';
 import { isDemoMode } from '@/lib/demo-mode';
 import { canReadDocument } from '@/lib/permissions';
 import { createClient } from '@/lib/supabase/client';
+import { normalizeCategoryId } from '@/lib/category-migration';
 
 export function getRepository(): Repository {
   if (isDemoMode()) return demoRepository;
@@ -164,7 +165,7 @@ export function getRepository(): Repository {
         title: doc.title,
         summary: doc.summary,
         slug: doc.slug,
-        category: catMap.get(doc.category_id) ?? undefined,
+        category: catMap.get(normalizeCategoryId(doc.category_id)) ?? undefined,
       }));
     },
   };
@@ -286,7 +287,7 @@ const demoRepository: Repository = {
         title: doc.title,
         summary: doc.summary,
         slug: doc.slug,
-        category: seedCategories.find((category) => category.id === doc.category_id)?.name,
+        category: seedCategories.find((category) => category.id === normalizeCategoryId(doc.category_id))?.name,
       }));
   },
 };

@@ -76,7 +76,7 @@ export const demoDocuments: Document[] = [
 
 1. 공유해야 할 정보가 생기면 일회성 대화인지 계속 참고할 정보인지 판단합니다.
 2. 계속 참고할 정보라면 Wiki 문서로 남깁니다.
-3. CURI AI, Projects, Secret, WAME, ETC 중 가장 맞는 카테고리를 선택합니다.
+3. Company, Projects, Guides, Secret 중 가장 맞는 카테고리를 선택합니다.
 4. 제목과 요약은 나중에 검색하기 쉬운 표현으로 작성합니다.
 5. 내용이 바뀌면 기존 문서를 수정해 최신 상태를 유지합니다.`,
     category_id: 'cat-etc',
@@ -262,7 +262,7 @@ CURI AI, WAME, Admin, Dashboard 등 서로 다른 제품에서도 동일한 패�
 - Primary Button은 새 문서, New Issue처럼 화면의 주요 행동에 사용합니다.
 - Badge는 상태와 짧은 metadata를 표현합니다.
 - Input과 Textarea는 label을 함께 제공해 입력 목적을 명확히 합니다.`,
-    category_id: 'cat-curi-ai',
+    category_id: 'cat-company',
     owner_id: 'user-minjoo',
     status: 'Published',
     visibility: 'COMPANY',
@@ -290,7 +290,7 @@ CURI AI, WAME, Admin, Dashboard 등 서로 다른 제품에서도 동일한 패�
 ## 장애 공유
 
 장애가 확인되면 ISSUE에 먼저 등록하고, 재현 조건과 영향 범위를 함께 남깁니다.`,
-    category_id: 'cat-wame',
+    category_id: 'cat-company',
     owner_id: 'user-ceo',
     status: 'Published',
     visibility: 'COMPANY',

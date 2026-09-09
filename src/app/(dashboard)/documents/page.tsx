@@ -10,13 +10,15 @@ import Link from 'next/link';
 import { useState, Suspense } from 'react';
 import { FileText, Plus, Search } from 'lucide-react';
 import { isSecretCategoryId } from '@/lib/permissions';
+import { normalizeCategorySlug } from '@/lib/category-migration';
 
 function DocumentsContent() {
   const { profile } = useAuth();
   const { documents, loading } = useDocumentStore();
   const profiles = useProfiles();
   const searchParams = useSearchParams();
-  const categorySlug = searchParams.get('category');
+  const categorySlugParam = searchParams.get('category');
+  const categorySlug = categorySlugParam ? normalizeCategorySlug(categorySlugParam) : null;
   const [search, setSearch] = useState('');
 
   if (!profile) return null;

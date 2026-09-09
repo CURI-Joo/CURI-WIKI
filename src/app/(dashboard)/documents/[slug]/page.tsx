@@ -19,6 +19,7 @@ import {
   User,
 } from 'lucide-react';
 import { isSecretCategoryId } from '@/lib/permissions';
+import { normalizeCategoryId } from '@/lib/category-migration';
 
 export default function DocumentDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -73,7 +74,7 @@ export default function DocumentDetailPage() {
     );
   }
 
-  const category = seedCategories.find((c) => c.id === doc.category_id);
+  const category = seedCategories.find((c) => c.id === normalizeCategoryId(doc.category_id));
 
   // Generate TOC from markdown headings
   const headings = doc.content_markdown

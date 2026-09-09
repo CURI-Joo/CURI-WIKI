@@ -12,6 +12,7 @@ import {
 import type { Category, Document, Profile } from '@/types';
 import { getDocumentStatusLabel } from '@/lib/document-labels';
 import { cn, formatRelativeDate } from '@/lib/utils';
+import { normalizeCategoryId } from '@/lib/category-migration';
 
 interface DocumentAlbumGridProps {
   documents: Document[];
@@ -53,7 +54,7 @@ export function DocumentAlbumGrid({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {documents.map((doc) => {
-        const category = categories.find((item) => item.id === doc.category_id);
+        const category = categories.find((item) => item.id === normalizeCategoryId(doc.category_id));
         const owner = profiles.find((profile) => profile.id === doc.owner_id);
 
         return (

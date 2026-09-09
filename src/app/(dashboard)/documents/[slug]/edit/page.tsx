@@ -13,6 +13,7 @@ import { ArrowLeft, Save, Eye } from 'lucide-react';
 import Link from 'next/link';
 import type { Document } from '@/types';
 import { isSecretCategoryId } from '@/lib/permissions';
+import { normalizeCategoryId } from '@/lib/category-migration';
 
 export default function EditDocumentPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -62,7 +63,7 @@ function EditForm({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [title, setTitle] = useState(doc.title);
   const [summary, setSummary] = useState(doc.summary);
-  const [categoryId, setCategoryId] = useState(doc.category_id);
+  const [categoryId, setCategoryId] = useState(normalizeCategoryId(doc.category_id));
   const [content, setContent] = useState(doc.content_markdown);
   const [plainContent, setPlainContent] = useState(() => markdownToPlainText(doc.content_markdown));
   const [saving, setSaving] = useState(false);

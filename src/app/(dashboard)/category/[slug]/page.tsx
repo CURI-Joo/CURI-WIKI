@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useDocumentStore } from '@/lib/document-store';
 import { useProfiles } from '@/lib/profiles-store';
 import { isSecretCategoryId } from '@/lib/permissions';
+import { normalizeCategoryId, normalizeCategorySlug } from '@/lib/category-migration';
 
 export default function CategoryPage({
   params,
@@ -17,13 +18,14 @@ export default function CategoryPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
+  const resolvedSlug = normalizeCategorySlug(slug);
   const { profile } = useAuth();
   const { documents, loading } = useDocumentStore();
   const profiles = useProfiles();
 
   if (!profile) return null;
 
-  const category = seedCategories.find((c) => c.slug === slug);
+  const category = seedCategories.find((c) => c.slug === resolvedSlug);
 
   if (!category) {
     return (
@@ -57,7 +59,7 @@ export default function CategoryPage({
   }
 
   const docs = documents
-    .filter((doc) => doc.category_id === category.id)
+    .filter((doc) => normalizeCategoryId(doc.category_id) === category.id)
     .sort(
       (a, b) =>
         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()

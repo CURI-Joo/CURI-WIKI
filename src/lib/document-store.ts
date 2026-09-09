@@ -5,6 +5,7 @@ import type { AccessLevel, DocStatus, Document, DocumentAccess } from '@/types';
 import { demoDocumentAccess, demoDocuments } from '@/data/demo-data';
 import { isDemoMode } from '@/lib/demo-mode';
 import { createClient } from '@/lib/supabase/client';
+import { normalizeCategoryId } from '@/lib/category-migration';
 import { slugify } from '@/lib/utils';
 
 const DOCUMENTS_KEY = 'curi-wiki-documents-v2';
@@ -91,11 +92,17 @@ function getMergedDocuments() {
   const byId = new Map<string, Document>();
 
   for (const document of demoDocuments) {
-    byId.set(document.id, document);
+    byId.set(document.id, {
+      ...document,
+      category_id: normalizeCategoryId(document.category_id),
+    });
   }
 
   for (const document of getCustomDocuments()) {
-    byId.set(document.id, document);
+    byId.set(document.id, {
+      ...document,
+      category_id: normalizeCategoryId(document.category_id),
+    });
   }
 
   return Array.from(byId.values());
@@ -201,7 +208,7 @@ function createLocalStoredDocument(input: CreateDocumentInput): Document {
     slug: createLocalUniqueSlug(input.title),
     summary: input.summary.trim(),
     content_markdown: input.content,
-    category_id: input.categoryId,
+    category_id: normalizeCategoryId(input.categoryId),
     owner_id: input.userId,
     status,
     visibility: 'COMPANY',
@@ -235,7 +242,7 @@ function updateLocalStoredDocument(
     slug: createLocalUniqueSlug(input.title, documentId),
     summary: input.summary.trim(),
     content_markdown: input.content,
-    category_id: input.categoryId,
+    category_id: normalizeCategoryId(input.categoryId),
     status,
     updated_by: input.userId,
     updated_at: now,
@@ -290,7 +297,7 @@ export async function createStoredDocument(
       slug,
       summary: input.summary.trim(),
       content_markdown: input.content,
-      category_id: input.categoryId,
+      category_id: normalizeCategoryId(input.categoryId),
       owner_id: input.userId,
       status,
       visibility: 'COMPANY',
@@ -329,7 +336,7 @@ export async function updateStoredDocument(
       slug,
       summary: input.summary.trim(),
       content_markdown: input.content,
-      category_id: input.categoryId,
+      category_id: normalizeCategoryId(input.categoryId),
       status,
       updated_by: input.userId,
       updated_at: now,
@@ -385,7 +392,13 @@ export function useDocumentStore() {
       .from('documents')
       .select('*')
       .order('updated_at', { ascending: false });
-    setState({ documents: (data ?? []) as Document[], loading: false });
+    setState({
+      documents: ((data ?? []) as Document[]).map((document) => ({
+        ...document,
+        category_id: normalizeCategoryId(document.category_id),
+      })),
+      loading: false,
+    });
   }, [isDemo]);
 
   useEffect(() => {
@@ -400,7 +413,13 @@ export function useDocumentStore() {
           .order('updated_at', { ascending: false });
 
         if (!cancelled) {
-          setState({ documents: (data ?? []) as Document[], loading: false });
+          setState({
+            documents: ((data ?? []) as Document[]).map((document) => ({
+              ...document,
+              category_id: normalizeCategoryId(document.category_id),
+            })),
+            loading: false,
+          });
         }
       }
 

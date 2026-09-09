@@ -15,7 +15,7 @@ export default function LoginPage() {
     if (loading) return;
     if (session && profile) {
       if (profile.status === 'approved') {
-        router.replace('/home');
+        router.replace('/tools');
       } else if (profile.status === 'pending') {
         router.replace('/pending');
       } else if (profile.status === 'rejected') {

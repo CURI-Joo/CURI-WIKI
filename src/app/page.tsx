@@ -13,7 +13,7 @@ export default function RootRedirect() {
     if (!session) {
       router.replace('/login');
     } else if (profile?.status === 'approved') {
-      router.replace('/home');
+      router.replace('/tools');
     } else if (profile?.status === 'pending') {
       router.replace('/pending');
     } else if (profile?.status === 'rejected') {

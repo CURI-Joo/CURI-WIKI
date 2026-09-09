@@ -16,6 +16,7 @@ import {
   HeartPulse,
   LayoutDashboard,
   BookOpenText,
+  Wrench,
   LogOut,
   Menu,
   X,
@@ -38,8 +39,8 @@ const issueProjectIcons: Record<string, LucideIcon> = {
 
 export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [homeOpen, setHomeOpen] = useState(true);
-  const [issueOpen, setIssueOpen] = useState(true);
+  const [homeOpen, setHomeOpen] = useState(false);
+  const [issueOpen, setIssueOpen] = useState(false);
   const pathname = usePathname();
   const { profile, logout } = useAuth();
 
@@ -60,6 +61,7 @@ export function Sidebar() {
   const isHomeActive = pathname === '/home' || pathname === '/' || pathname.startsWith('/documents') || pathname.startsWith('/category/');
   const isIssueActive = pathname.startsWith('/issues');
   const isIssueRootActive = pathname === '/issues';
+  const isToolsActive = pathname.startsWith('/tools');
   const isAdminActive = pathname.startsWith('/admin');
 
   // Auto-expand HOME when navigating to its children
@@ -158,6 +160,22 @@ export function Sidebar() {
               </div>
             )}
           </div>
+
+          {/* Spacer */}
+          <div className="h-1" />
+
+          <Link
+            href="/tools"
+            className={cn(
+              'flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors',
+              isToolsActive
+                ? 'bg-curi-pink-soft text-text-primary'
+                : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+            )}
+          >
+            <Wrench className={cn('h-4 w-4', isToolsActive ? 'text-curi-pink' : 'text-text-muted')} />
+            TOOLS
+          </Link>
 
           {/* Spacer */}
           <div className="h-1" />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
@@ -14,7 +14,9 @@ export default function DashboardLayout({
 }) {
   const { session, profile, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const isToolsLanding = pathname === '/tools';
 
   useEffect(() => {
     if (loading) return;
@@ -53,8 +55,8 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 ml-0 md:ml-[240px]">
+      {!isToolsLanding && <Sidebar />}
+      <div className={`flex-1 flex flex-col min-w-0 ${isToolsLanding ? 'ml-0' : 'ml-0 md:ml-[240px]'}`}>
         <Topbar onOpenCommandPalette={handleOpenCommandPalette} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
           {children}

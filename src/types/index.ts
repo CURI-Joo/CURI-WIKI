@@ -9,6 +9,7 @@ export type ExternalStatus = 'INTERNAL_ONLY' | 'REVIEW_REQUIRED' | 'EXTERNAL_OK'
 export type AccessLevel = 'VIEW' | 'EDIT';
 
 export type CategorySlug =
+  | 'company'
   | 'home'
   | 'projects'
   | 'secret'
@@ -22,6 +23,7 @@ export type CategorySlug =
   | 'onboarding'
   | 'curi-ai'
   | 'wame'
+  | 'guides'
   | 'etc';
 
 // ─── Data Models ─────────────────────────────────────────

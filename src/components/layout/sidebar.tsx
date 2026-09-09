@@ -6,11 +6,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home,
-  Bot,
-  FolderKanban,
-  Shield,
+  Building2,
   MessageSquare,
-  MoreHorizontal,
+  FolderKanban,
+  BookOpen,
+  Shield,
   AlertCircle,
   ShieldCheck,
   HeartPulse,
@@ -80,13 +80,12 @@ export function Sidebar() {
   }, [isIssueActive]);
 
   const subCategories = [
-    { label: 'CURI AI', icon: Bot, href: '/category/curi-ai' },
+    { label: 'Company', icon: Building2, href: '/category/company' },
     { label: 'Projects', icon: FolderKanban, href: '/category/projects' },
+    { label: 'Guides', icon: BookOpen, href: '/category/guides' },
     ...(profile?.role === 'admin'
       ? [{ label: 'Secret', icon: Shield, href: '/category/secret' }]
       : []),
-    { label: 'ETC', icon: MoreHorizontal, href: '/category/etc' },
-    { label: 'WAME', icon: MessageSquare, href: '/category/wame' },
   ];
 
   const sidebarContent = (

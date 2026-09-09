@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
-import { ImagePlus, Loader2, Paperclip } from 'lucide-react';
+import { Columns2, ImagePlus, Loader2, Paperclip } from 'lucide-react';
 import {
   ACCEPT_ATTRIBUTE,
   ALLOWED_IMAGE_TYPES,
@@ -44,6 +44,14 @@ function insertAtCursor(
     nextContent: `${before}${insertion}${after}`,
     nextCursor: before.length + insertion.length,
   };
+}
+
+function buildMediaLayoutTemplate() {
+  return [
+    '| 미디어 | 설명 |',
+    '| --- | --- |',
+    '| ![회사 아이콘|small|left](/curi-logo.png) | [회사 아이콘 파일 다운로드](/curi-logo.png) |',
+  ].join('\n');
 }
 
 interface MarkdownImageUploadButtonProps {
@@ -159,6 +167,31 @@ export function MarkdownImageUploadButton({
     }
   };
 
+  const handleInsertLayoutTemplate = () => {
+    setError(null);
+
+    const selectionStart = textareaRef.current?.selectionStart ?? content.length;
+    const selectionEnd = textareaRef.current?.selectionEnd ?? content.length;
+    const markdown = buildMediaLayoutTemplate();
+
+    let nextCursor = selectionStart + markdown.length + 1;
+    onContentChange((currentContent) => {
+      const result = insertAtCursor(
+        currentContent,
+        selectionStart,
+        selectionEnd,
+        markdown
+      );
+      nextCursor = result.nextCursor;
+      return result.nextContent;
+    });
+
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
   const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -187,6 +220,17 @@ export function MarkdownImageUploadButton({
           <ImagePlus className="h-3.5 w-3.5" />
         )}
         이미지
+      </button>
+      <button
+        type="button"
+        onClick={handleInsertLayoutTemplate}
+        disabled={disabled || uploadingKind !== null}
+        title="좌우 배치 템플릿 삽입"
+        aria-label="좌우 배치 템플릿 삽입"
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
+      >
+        <Columns2 className="h-3.5 w-3.5" />
+        좌우
       </button>
       <button
         type="button"

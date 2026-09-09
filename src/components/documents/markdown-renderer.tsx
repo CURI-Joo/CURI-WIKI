@@ -8,6 +8,14 @@ type InlineMatch = {
   match: RegExpMatchArray;
 };
 
+type ImageLayout = 'left' | 'center' | 'right';
+
+type ParsedImageAlt = {
+  label: string;
+  small: boolean;
+  layout: ImageLayout;
+};
+
 function isSafeImageSrc(src: string) {
   if (src.startsWith('/') || src.startsWith('data:image/')) return true;
 
@@ -19,24 +27,60 @@ function isSafeImageSrc(src: string) {
   }
 }
 
+function parseImageAlt(alt: string): ParsedImageAlt {
+  const raw = alt.trim();
+  if (!raw) {
+    return { label: '', small: false, layout: 'center' };
+  }
+
+  const [labelPart, ...optionParts] = raw.split('|');
+  const options = optionParts.map((option) => option.trim().toLowerCase());
+
+  let layout: ImageLayout = 'center';
+  if (options.includes('left') || options.includes('좌')) {
+    layout = 'left';
+  } else if (options.includes('right') || options.includes('우')) {
+    layout = 'right';
+  }
+
+  const small = options.some((option) => option === 'small' || option === 'tiny' || option === '작게');
+
+  return {
+    label: labelPart.trim(),
+    small,
+    layout,
+  };
+}
+
 function MarkdownImage({ alt, src }: { alt: string; src: string }) {
   const safeSrc = src.trim();
+  const parsedAlt = parseImageAlt(alt);
+
+  const wrapperAlignClass = parsedAlt.layout === 'left'
+    ? 'mr-auto'
+    : parsedAlt.layout === 'right'
+      ? 'ml-auto'
+      : 'mx-auto';
+
+  const imageClass = parsedAlt.small
+    ? 'max-h-[120px] w-auto max-w-[120px] object-contain'
+    : 'max-h-[560px] w-full object-contain';
 
   if (!isSafeImageSrc(safeSrc)) {
     return (
       <span className="text-sm text-text-muted">
-        {alt || '이미지'}
+        {parsedAlt.label || '이미지'}
       </span>
     );
   }
 
   return (
-    <span className="my-4 block overflow-hidden rounded-lg border border-border bg-background">
+    <span className={`my-4 block w-fit max-w-full overflow-hidden rounded-lg border border-border bg-background ${wrapperAlignClass}`}>
       <img
         src={safeSrc}
-        alt={alt}
+        alt={parsedAlt.label}
         loading="lazy"
-        className="max-h-[560px] w-full object-contain"
+        className={imageClass}
       />
     </span>
   );

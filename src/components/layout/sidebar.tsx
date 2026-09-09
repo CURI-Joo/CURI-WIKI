@@ -17,6 +17,7 @@ import {
   LayoutDashboard,
   BookOpenText,
   Wrench,
+  LogIn,
   LogOut,
   Menu,
   X,
@@ -83,9 +84,7 @@ export function Sidebar() {
     { label: 'Company', icon: Building2, href: '/category/company' },
     { label: 'Projects', icon: FolderKanban, href: '/category/projects' },
     { label: 'Guides', icon: BookOpen, href: '/category/guides' },
-    ...(profile?.role === 'admin'
-      ? [{ label: 'Secret', icon: Shield, href: '/category/secret' }]
-      : []),
+    { label: 'Secret', icon: Shield, href: '/category/secret' },
   ];
 
   const sidebarContent = (
@@ -251,7 +250,7 @@ export function Sidebar() {
 
       {/* User */}
       <div className="border-t border-border p-3">
-        {profile && (
+        {profile ? (
           <div className="space-y-2">
             <div className="flex items-center gap-2.5">
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-elevated text-[10px] font-medium text-text-secondary">
@@ -272,6 +271,14 @@ export function Sidebar() {
               </button>
             </div>
           </div>
+        ) : (
+          <Link
+            href="/login"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary"
+          >
+            <LogIn className="h-3.5 w-3.5" />
+            로그인
+          </Link>
         )}
       </div>
     </div>

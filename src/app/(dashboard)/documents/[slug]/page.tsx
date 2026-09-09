@@ -18,7 +18,6 @@ import {
   Trash2,
   User,
 } from 'lucide-react';
-import { isSecretCategoryId } from '@/lib/permissions';
 import { normalizeCategoryId } from '@/lib/category-migration';
 
 export default function DocumentDetailPage() {
@@ -48,18 +47,6 @@ export default function DocumentDetailPage() {
   }
 
   const doc = documents.find((d) => d.slug === decodeURIComponent(slug));
-
-  if (doc && isSecretCategoryId(doc.category_id) && profile?.role !== 'admin') {
-    return (
-      <div className="max-w-4xl mx-auto text-center py-20">
-        <p className="text-text-secondary text-lg mb-2">접근 권한이 없습니다</p>
-        <p className="text-sm text-text-muted">Secret 문서는 관리자만 볼 수 있습니다.</p>
-        <Link href="/documents" className="text-curi-pink text-sm hover:underline inline-block mt-3">
-          전체 글로
-        </Link>
-      </div>
-    );
-  }
 
   if (!doc) {
     return (

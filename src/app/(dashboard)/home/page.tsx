@@ -7,13 +7,11 @@ import { seedCategories } from '@/data/seed-categories';
 import { useAuth } from '@/lib/auth-context';
 import { useDocumentStore } from '@/lib/document-store';
 import { useProfiles } from '@/lib/profiles-store';
-import { isSecretCategoryId } from '@/lib/permissions';
 
 export default function HomePage() {
   const { profile } = useAuth();
   const { documents, loading } = useDocumentStore();
   const profiles = useProfiles();
-  const isAdmin = profile?.role === 'admin';
 
   if (loading) {
     return (
@@ -24,7 +22,7 @@ export default function HomePage() {
   }
 
   const docs = documents
-    .filter((doc) => isAdmin || !isSecretCategoryId(doc.category_id))
+    .slice()
     .sort(
       (a, b) =>
         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
@@ -40,11 +38,11 @@ export default function HomePage() {
           </p>
         </div>
         <Link
-          href="/documents/new"
+          href={profile ? '/documents/new' : '/login'}
           className="inline-flex items-center gap-1.5 rounded-lg bg-curi-pink px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-curi-pink-hover"
         >
           <Plus className="h-4 w-4" />
-          새 문서
+          {profile ? '새 문서' : '로그인 후 작성'}
         </Link>
       </div>
 

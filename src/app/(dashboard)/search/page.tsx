@@ -7,18 +7,15 @@ import { seedCategories } from '@/data/seed-categories';
 import Link from 'next/link';
 import { Search, FileText } from 'lucide-react';
 import type { SearchResult } from '@/types';
-import { isSecretCategoryId } from '@/lib/permissions';
 import { normalizeCategoryId } from '@/lib/category-migration';
 
 export default function SearchPage() {
-  const { profile } = useAuth();
+  useAuth();
   const { documents, loading } = useDocumentStore();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
-  const isAdmin = profile?.role === 'admin';
-
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto space-y-6 py-4">
@@ -33,7 +30,7 @@ export default function SearchPage() {
     setSearching(true);
     try {
       const normalizedQuery = query.trim().toLowerCase();
-      const visibleDocuments = documents.filter((document) => isAdmin || !isSecretCategoryId(document.category_id));
+      const visibleDocuments = documents;
 
       const nextResults = visibleDocuments
         .filter((document) => [document.title, document.summary, document.content_markdown]

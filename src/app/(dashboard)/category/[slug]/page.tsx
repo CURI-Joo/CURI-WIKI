@@ -9,7 +9,6 @@ import { seedCategories } from '@/data/seed-categories';
 import { useAuth } from '@/lib/auth-context';
 import { useDocumentStore } from '@/lib/document-store';
 import { useProfiles } from '@/lib/profiles-store';
-import { isSecretCategoryId } from '@/lib/permissions';
 import { normalizeCategoryId, normalizeCategorySlug } from '@/lib/category-migration';
 
 export default function CategoryPage({
@@ -22,7 +21,6 @@ export default function CategoryPage({
   const { profile } = useAuth();
   const { documents, loading } = useDocumentStore();
   const profiles = useProfiles();
-  const isAdmin = profile?.role === 'admin';
 
   const category = seedCategories.find((c) => c.slug === resolvedSlug);
 
@@ -30,18 +28,6 @@ export default function CategoryPage({
     return (
       <div className="mx-auto max-w-3xl py-20 text-center">
         <p className="text-text-muted">카테고리를 찾을 수 없습니다.</p>
-        <Link href="/home">
-          <Button variant="ghost" size="sm" className="mt-4">홈으로 돌아가기</Button>
-        </Link>
-      </div>
-    );
-  }
-
-  if (isSecretCategoryId(category.id) && !isAdmin) {
-    return (
-      <div className="mx-auto max-w-3xl py-20 text-center">
-        <p className="text-text-secondary text-lg mb-2">접근 권한이 없습니다</p>
-        <p className="text-sm text-text-muted">Secret 카테고리는 관리자만 볼 수 있습니다.</p>
         <Link href="/home">
           <Button variant="ghost" size="sm" className="mt-4">홈으로 돌아가기</Button>
         </Link>
@@ -79,11 +65,11 @@ export default function CategoryPage({
           </div>
         </div>
         <Link
-          href="/documents/new"
+          href={profile ? '/documents/new' : '/login'}
           className="inline-flex items-center gap-1.5 rounded-lg bg-curi-pink px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-curi-pink-hover"
         >
           <Plus className="h-4 w-4" />
-          새 문서
+          {profile ? '새 문서' : '로그인 후 작성'}
         </Link>
       </div>
 

@@ -9,7 +9,6 @@ import { useProfiles } from '@/lib/profiles-store';
 import Link from 'next/link';
 import { useState, Suspense } from 'react';
 import { FileText, Plus, Search } from 'lucide-react';
-import { isSecretCategoryId } from '@/lib/permissions';
 import { normalizeCategorySlug } from '@/lib/category-migration';
 
 function DocumentsContent() {
@@ -21,8 +20,6 @@ function DocumentsContent() {
   const categorySlug = categorySlugParam ? normalizeCategorySlug(categorySlugParam) : null;
   const [search, setSearch] = useState('');
 
-  const isAdmin = profile?.role === 'admin';
-
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto py-16 text-center">
@@ -31,20 +28,14 @@ function DocumentsContent() {
     );
   }
 
-  let docs = documents.filter(
-    (doc) => isAdmin || !isSecretCategoryId(doc.category_id)
-  );
+  let docs = [...documents];
 
   const category = categorySlug
     ? seedCategories.find((c) => c.slug === categorySlug)
     : null;
-  const resolvedCategory =
-    category && !isAdmin && isSecretCategoryId(category.id)
-      ? null
-      : category;
+  const resolvedCategory = category;
 
   const categoryFilters = seedCategories
-    .filter((categoryItem) => isAdmin || !isSecretCategoryId(categoryItem.id))
     .slice()
     .sort((a, b) => a.sort_order - b.sort_order);
 
@@ -75,11 +66,11 @@ function DocumentsContent() {
           </p>
         </div>
         <Link
-          href="/documents/new"
+          href={profile ? '/documents/new' : '/login'}
           className="inline-flex items-center gap-1.5 rounded-lg bg-curi-pink px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-curi-pink-hover"
         >
           <Plus className="h-4 w-4" />
-          새 문서
+          {profile ? '새 문서' : '로그인 후 작성'}
         </Link>
       </div>
 

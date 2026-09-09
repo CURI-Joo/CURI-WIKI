@@ -16,7 +16,6 @@ import {
   HeartPulse,
   LayoutDashboard,
   BookOpenText,
-  Sparkles,
   LogOut,
   Menu,
   X,
@@ -137,18 +136,6 @@ export function Sidebar() {
             {/* Sub-categories */}
             {homeOpen && (
               <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-2">
-                <Link
-                  href="/ai-writer"
-                  className={cn(
-                    'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors',
-                    pathname === '/ai-writer'
-                      ? 'bg-curi-pink-soft text-text-primary'
-                      : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
-                  )}
-                >
-                  <Sparkles className={cn('h-3.5 w-3.5', pathname === '/ai-writer' ? 'text-curi-pink' : 'text-text-muted')} />
-                  AI Writer
-                </Link>
                 {subCategories.map((item) => {
                   const Icon = item.icon;
                   const active = pathname === item.href || pathname.startsWith(item.href + '/');

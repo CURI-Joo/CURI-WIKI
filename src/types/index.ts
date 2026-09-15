@@ -216,3 +216,20 @@ export interface IssueActivity {
   metadata: Record<string, unknown>;
   created_at: string;
 }
+
+// ─── Work Log ────────────────────────────────────────────
+export type WorkLogProject = 'CURI' | 'LG생활건강' | 'LG전자' | 'WAME' | 'Internal' | 'ETC';
+export type WorkLogStatus = 'Todo' | 'In Progress' | 'Done';
+
+export interface WorkLog {
+  id: string;
+  user_id: string;
+  work_date: string;
+  project: WorkLogProject;
+  title: string;
+  description: string;
+  status: WorkLogStatus;
+  related_link: string | null;
+  created_at: string;
+  updated_at: string;
+}

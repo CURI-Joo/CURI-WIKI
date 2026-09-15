@@ -209,12 +209,13 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
         }
       }
 
-      // Telegram notification (그룹 Topic으로 전송)
+      // Telegram notification (fire-and-forget)
       try {
         const assignee = assigneeId ? profiles.find((p) => p.id === assigneeId) : null;
-        const tgRes = await fetch('/api/telegram', {
+        void fetch('/api/telegram', {
           method: 'POST',
           credentials: 'include',
+          keepalive: true,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             issue_id: issue.id,
@@ -227,11 +228,9 @@ export default function NewProjectIssuePage({ params }: { params: Promise<{ proj
             status: issue.status,
             issue_url: `/issues/${projectSlug}/${issue.id}`,
           }),
-        });
-        const tgData = await tgRes.json();
-        console.log('[Telegram] response:', tgRes.status, tgData);
+        }).catch((err) => console.warn('[Telegram] notification failed:', err));
       } catch (err) {
-        console.warn('[Telegram] notification failed:', err);
+        console.warn('[Telegram] notification request failed:', err);
       }
 
       router.push(`/issues/${projectSlug}/${issue.id}`);

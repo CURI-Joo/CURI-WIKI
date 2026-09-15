@@ -1,0 +1,8 @@
+{
+  "name": "wiki-link-writer",
+  "description": "Turn a shared link into a structured wiki draft and prepare a ready-to-paste document for CURI Wiki.",
+  "author": {
+    "name": "Minjoo Team",
+    "email": "minjoo@example.com"
+  }
+}

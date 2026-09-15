@@ -20,6 +20,7 @@ export default function DashboardLayout({
   const requiresAuth =
     pathname.startsWith('/admin') ||
     pathname.startsWith('/issues') ||
+    pathname.startsWith('/work-log') ||
     pathname === '/documents/new' ||
     (pathname.startsWith('/documents/') && pathname.endsWith('/edit'));
 

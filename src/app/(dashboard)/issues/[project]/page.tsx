@@ -15,7 +15,7 @@ import type { IssueStatus, IssuePriority } from '@/types';
 export default function ProjectIssuesPage({ params }: { params: Promise<{ project: string }> }) {
   const { project: projectSlug } = use(params);
   const projectName = issueProjectMap[projectSlug];
-  const { issues, loading } = useIssueStore();
+  const { issues, loading } = useIssueStore({ includeActivities: false });
   const profiles = useProfiles();
   const [status, setStatus] = useState<IssueStatus | 'all'>('all');
   const [priority, setPriority] = useState<IssuePriority | 'all'>('all');

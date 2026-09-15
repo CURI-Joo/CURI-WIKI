@@ -5,7 +5,7 @@ import type { AccessLevel, DocStatus, Document, DocumentAccess } from '@/types';
 import { demoDocumentAccess, demoDocuments } from '@/data/demo-data';
 import { isDemoMode } from '@/lib/demo-mode';
 import { createClient } from '@/lib/supabase/client';
-import { normalizeCategoryId } from '@/lib/category-migration';
+import { normalizeCategoryId, resolveCategoryIdForDatabase } from '@/lib/category-migration';
 import { slugify } from '@/lib/utils';
 
 const DOCUMENTS_KEY = 'curi-wiki-documents-v2';
@@ -174,6 +174,24 @@ async function createRemoteUniqueSlug(
   return `${base}-${suffix}`;
 }
 
+async function resolveRemoteCategoryId(
+  supabase: ReturnType<typeof createClient>,
+  categoryId: string
+) {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id');
+
+  if (error || !data) {
+    return resolveCategoryIdForDatabase(categoryId);
+  }
+
+  return resolveCategoryIdForDatabase(
+    categoryId,
+    data.map((category: { id: string }) => category.id)
+  );
+}
+
 function buildAccess(documentId: string, userIds: string[], accessLevel: AccessLevel = 'VIEW') {
   return Array.from(new Set(userIds)).map((userId) => ({
     id: `access-${documentId}-${userId}`,
@@ -294,6 +312,7 @@ export async function createStoredDocument(
 
   const supabase = createClient();
   const slug = await createRemoteUniqueSlug(supabase, input.title);
+  const databaseCategoryId = await resolveRemoteCategoryId(supabase, input.categoryId);
   const status = input.status ?? 'Published';
   const now = new Date().toISOString();
 
@@ -304,7 +323,7 @@ export async function createStoredDocument(
       slug,
       summary: input.summary.trim(),
       content_markdown: input.content,
-      category_id: normalizeCategoryId(input.categoryId),
+      category_id: databaseCategoryId,
       owner_id: input.userId,
       status,
       visibility: 'COMPANY',
@@ -328,6 +347,7 @@ export async function updateStoredDocument(
 
   const supabase = createClient();
   const slug = await createRemoteUniqueSlug(supabase, input.title, documentId);
+  const databaseCategoryId = await resolveRemoteCategoryId(supabase, input.categoryId);
   const { data: existing } = await supabase
     .from('documents')
     .select('status, published_at')
@@ -343,7 +363,7 @@ export async function updateStoredDocument(
       slug,
       summary: input.summary.trim(),
       content_markdown: input.content,
-      category_id: normalizeCategoryId(input.categoryId),
+      category_id: databaseCategoryId,
       status,
       updated_by: input.userId,
       updated_at: now,

@@ -16,8 +16,16 @@ import { IssueStatusBadge } from '@/components/issues/issue-status-badge';
 import { IssuePriorityBadge } from '@/components/issues/issue-priority-badge';
 import { IssueActionButtons } from '@/components/issues/issue-action-buttons';
 import { IssueActivityLog } from '@/components/issues/issue-activity-log';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatDate } from '@/lib/utils';
 import type { IssueStatus } from '@/types';
+
+type AttachmentPreview = {
+  id: string;
+  url: string;
+  file_name: string;
+  mime_type: string;
+};
 
 export default function ProjectIssueDetailPage({
   params,
@@ -30,7 +38,8 @@ export default function ProjectIssueDetailPage({
   const profiles = useProfiles();
   const router = useRouter();
   const isDemo = isDemoMode();
-  const [attachmentUrls, setAttachmentUrls] = useState<{ id: string; url: string; file_name: string; mime_type: string }[]>([]);
+  const [attachmentUrls, setAttachmentUrls] = useState<AttachmentPreview[]>([]);
+  const [selectedAttachment, setSelectedAttachment] = useState<AttachmentPreview | null>(null);
 
   const issue = issues.find((i) => i.id === id);
   const issueActivities = activities
@@ -61,7 +70,7 @@ export default function ProjectIssueDetailPage({
       );
 
       if (!cancelled) {
-        setAttachmentUrls(urls.filter(Boolean) as { id: string; url: string; file_name: string; mime_type: string }[]);
+        setAttachmentUrls(urls.filter(Boolean) as AttachmentPreview[]);
       }
     }
 
@@ -168,11 +177,21 @@ export default function ProjectIssueDetailPage({
               {attachmentUrls.map((att) => (
                 <div key={att.id} className="rounded-lg border border-border overflow-hidden bg-surface-elevated">
                   {att.mime_type.startsWith('video/') ? (
-                    <div className="flex items-center justify-center h-32">
+                    <div className="flex items-center justify-center h-32" title={att.file_name}>
                       <Film className="h-8 w-8 text-text-muted" />
                     </div>
                   ) : (
-                    <img src={att.url} alt={att.file_name} className="h-32 w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAttachment(att)}
+                      className="group relative block h-32 w-full text-left"
+                      aria-label={`${att.file_name} 확대 보기`}
+                    >
+                      <img src={att.url} alt={att.file_name} className="h-32 w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
+                      <span className="absolute inset-x-0 bottom-0 bg-black/50 px-2 py-1 text-[11px] text-white/95 opacity-0 transition-opacity group-hover:opacity-100">
+                        클릭해서 확대 보기
+                      </span>
+                    </button>
                   )}
                 </div>
               ))}
@@ -217,6 +236,25 @@ export default function ProjectIssueDetailPage({
         <h2 className="text-sm font-bold text-text-primary">Activity</h2>
         <IssueActivityLog activities={issueActivities} profiles={profiles} />
       </div>
+
+      <Dialog open={Boolean(selectedAttachment)} onOpenChange={(open) => !open && setSelectedAttachment(null)}>
+        <DialogContent className="max-w-5xl p-4 sm:p-6">
+          {selectedAttachment && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="truncate pr-8 text-sm sm:text-base">{selectedAttachment.file_name}</DialogTitle>
+              </DialogHeader>
+              <div className="max-h-[75vh] overflow-auto rounded-lg border border-border bg-surface-elevated p-2">
+                <img
+                  src={selectedAttachment.url}
+                  alt={selectedAttachment.file_name}
+                  className="mx-auto h-auto max-h-[70vh] w-auto max-w-full rounded"
+                />
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -113,7 +113,7 @@ Browser (Next.js Client)
     ↕ Supabase Auth (Google OAuth, 쿠키 기반 세션)
     ↕ Supabase Postgres (RLS 적용)
     ↕ Supabase Storage (wiki-media 버킷)
-    ↕ Next.js API Routes (/api/telegram, /api/upload, /api/admin)
+    ↕ Next.js API Routes (/api/telegram, /api/upload, /api/admin, /api/wiki/*)
     ↕ Vercel (배포)
 ```
 
@@ -137,6 +137,9 @@ Browser (Next.js Client)
 /issues/[project]          → 프로젝트 이슈 목록 (필터링, 검색)
 /issues/[project]/new      → 새 이슈 등록
 /issues/[project]/[id]     → 이슈 상세 (상태 변경, 활동 로그, 첨부파일)
+
+/api/wiki/me               → 로그인/승인 상태 확인 API
+/api/wiki/documents        → 로그인 계정 기준 문서 생성 API
 
 /admin/users               → 사용자 관리 (관리자 전용)
 /search                    → 전체 검색

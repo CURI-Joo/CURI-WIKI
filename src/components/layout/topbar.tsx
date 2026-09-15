@@ -16,6 +16,7 @@ const pathLabels: Record<string, string> = {
   '/search': '검색',
   '/documents': '전체 글',
   '/documents/new': '새 글',
+  '/work-log': 'Work Log',
   '/design-system': '디자인 시스템',
 };
 

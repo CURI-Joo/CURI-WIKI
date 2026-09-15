@@ -17,6 +17,7 @@ import {
   LayoutDashboard,
   BookOpenText,
   Wrench,
+  CalendarDays,
   LogIn,
   LogOut,
   Menu,
@@ -63,6 +64,7 @@ export function Sidebar() {
   const isIssueActive = pathname.startsWith('/issues');
   const isIssueRootActive = pathname === '/issues';
   const isToolsActive = pathname.startsWith('/tools');
+  const isWorkLogActive = pathname.startsWith('/work-log');
   const isAdminActive = pathname.startsWith('/admin');
 
   // Auto-expand HOME when navigating to its children
@@ -173,6 +175,19 @@ export function Sidebar() {
           >
             <Wrench className={cn('h-4 w-4', isToolsActive ? 'text-curi-pink' : 'text-text-muted')} />
             TOOLS
+          </Link>
+
+          <Link
+            href="/work-log"
+            className={cn(
+              'flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors',
+              isWorkLogActive
+                ? 'bg-curi-pink-soft text-text-primary'
+                : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary'
+            )}
+          >
+            <CalendarDays className={cn('h-4 w-4', isWorkLogActive ? 'text-curi-pink' : 'text-text-muted')} />
+            WORK LOG
           </Link>
 
           {/* Spacer */}

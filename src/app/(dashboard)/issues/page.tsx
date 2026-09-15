@@ -6,7 +6,7 @@ import { useIssueStore } from '@/lib/issue-store';
 import { issueProjects } from '@/data/issue-projects';
 
 export default function IssuesPage() {
-  const { issues, loading } = useIssueStore();
+  const { issues, loading } = useIssueStore({ includeActivities: false });
 
   if (loading) {
     return (

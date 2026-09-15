@@ -24,6 +24,13 @@ interface IssueStoreState {
   loading: boolean;
 }
 
+interface UseIssueStoreOptions {
+  includeActivities?: boolean;
+}
+
+let remoteIssuesCache: Issue[] | null = null;
+let remoteActivitiesCache: IssueActivity[] | null = null;
+
 interface CreateIssueInput {
   title: string;
   description: string;
@@ -418,12 +425,17 @@ export async function deleteIssue(issueId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-export function useIssueStore() {
+export function useIssueStore(options: UseIssueStoreOptions = {}) {
+  const includeActivities = options.includeActivities ?? true;
   const isDemo = isDemoMode();
   const [state, setState] = useState<IssueStoreState>(() => ({
-    issues: isDemo ? getMergedIssues() : [],
-    activities: isDemo ? getMergedActivities() : [],
-    loading: !isDemo,
+    issues: isDemo ? getMergedIssues() : (remoteIssuesCache ?? []),
+    activities: isDemo
+      ? getMergedActivities()
+      : (includeActivities ? (remoteActivitiesCache ?? []) : []),
+    loading: isDemo
+      ? false
+      : (!remoteIssuesCache || (includeActivities && !remoteActivitiesCache)),
   }));
 
   const refresh = useCallback(async () => {
@@ -437,29 +449,38 @@ export function useIssueStore() {
     }
 
     const supabase = createClient();
+    const issuesReq = supabase
+      .from('issues')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    const [issuesRes, activitiesRes] = await Promise.all([
-      supabase
-        .from('issues')
-        .select('*')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('issue_activities')
-        .select('*')
-        .order('created_at', { ascending: true }),
-    ]);
+    const [issuesRes, activitiesRes] = includeActivities
+      ? await Promise.all([
+          issuesReq,
+          supabase
+            .from('issue_activities')
+            .select('*')
+            .order('created_at', { ascending: true }),
+        ])
+      : [await issuesReq, null];
 
     const issues = (issuesRes.data ?? []).map((issue: Record<string, unknown>) => ({
       ...issue,
       attachments: [],
     })) as Issue[];
 
+    remoteIssuesCache = issues;
+
+    if (activitiesRes) {
+      remoteActivitiesCache = (activitiesRes.data ?? []) as IssueActivity[];
+    }
+
     setState({
       issues,
-      activities: (activitiesRes.data ?? []) as IssueActivity[],
+      activities: includeActivities ? (remoteActivitiesCache ?? []) : [],
       loading: false,
     });
-  }, [isDemo]);
+  }, [isDemo, includeActivities]);
 
   useEffect(() => {
     if (!isDemo) {
@@ -467,16 +488,20 @@ export function useIssueStore() {
 
       async function loadIssues() {
         const supabase = createClient();
-        const [issuesRes, activitiesRes] = await Promise.all([
-          supabase
-            .from('issues')
-            .select('*')
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('issue_activities')
-            .select('*')
-            .order('created_at', { ascending: true }),
-        ]);
+        const issuesReq = supabase
+          .from('issues')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        const [issuesRes, activitiesRes] = includeActivities
+          ? await Promise.all([
+              issuesReq,
+              supabase
+                .from('issue_activities')
+                .select('*')
+                .order('created_at', { ascending: true }),
+            ])
+          : [await issuesReq, null];
 
         if (cancelled) return;
 
@@ -485,9 +510,15 @@ export function useIssueStore() {
           attachments: [],
         })) as Issue[];
 
+        remoteIssuesCache = issues;
+
+        if (activitiesRes) {
+          remoteActivitiesCache = (activitiesRes.data ?? []) as IssueActivity[];
+        }
+
         setState({
           issues,
-          activities: (activitiesRes.data ?? []) as IssueActivity[],
+          activities: includeActivities ? (remoteActivitiesCache ?? []) : [],
           loading: false,
         });
       }
@@ -523,7 +554,7 @@ export function useIssueStore() {
       window.removeEventListener(STORE_EVENT, sync);
       window.removeEventListener('storage', handleStorage);
     };
-  }, [isDemo]);
+  }, [isDemo, includeActivities]);
 
   return { ...state, refresh };
 }

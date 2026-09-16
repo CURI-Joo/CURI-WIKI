@@ -10,7 +10,7 @@ import type { Session } from '@supabase/supabase-js';
 interface AuthContextValue {
   session: Session | null;
   profile: Profile | null;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (nextPath?: string) => Promise<void>;
   logout: () => Promise<void>;
   loading: boolean;
   refreshProfile: () => Promise<void>;
@@ -108,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, [isDemo, supabase, fetchProfile]);
 
-  const loginWithGoogle = useCallback(async () => {
+  const loginWithGoogle = useCallback(async (nextPath?: string) => {
     if (isDemo) {
       setSession(demoSession);
       setProfile(demoProfile);
@@ -118,7 +118,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
 
     const redirectTo = typeof window !== 'undefined'
-      ? `${window.location.origin}/auth/callback`
+      ? (() => {
+          const callbackUrl = new URL('/auth/callback', window.location.origin);
+          if (nextPath && nextPath.startsWith('/')) {
+            callbackUrl.searchParams.set('next', nextPath);
+          }
+          return callbackUrl.toString();
+        })()
       : '/auth/callback';
 
     await supabase.auth.signInWithOAuth({

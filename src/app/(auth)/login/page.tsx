@@ -1,34 +1,37 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
-export default function LoginPage() {
+function LoginPageContent() {
   const { session, profile, loginWithGoogle, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
+  const nextPath = searchParams.get('next');
+  const redirectAfterLogin = nextPath && nextPath.startsWith('/') ? nextPath : '/tools';
 
   useEffect(() => {
     if (loading) return;
     if (session && profile) {
       if (profile.status === 'approved') {
-        router.replace('/tools');
+        router.replace(redirectAfterLogin);
       } else if (profile.status === 'pending') {
         router.replace('/pending');
       } else if (profile.status === 'rejected') {
         router.replace('/rejected');
       }
     }
-  }, [session, profile, loading, router]);
+  }, [session, profile, loading, redirectAfterLogin, router]);
 
   const handleGoogleLogin = async () => {
     setError(null);
     setLoginLoading(true);
     try {
-      await loginWithGoogle();
+      await loginWithGoogle(redirectAfterLogin);
     } catch {
       setError('Google 로그인에 실패했습니다. 다시 시도해주세요.');
       setLoginLoading(false);
@@ -86,5 +89,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

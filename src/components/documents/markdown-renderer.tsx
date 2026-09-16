@@ -1,10 +1,10 @@
 /* eslint-disable @next/next/no-img-element */
 
 import type { ReactNode } from 'react';
-import { Download, Paperclip } from 'lucide-react';
+import { Download, ExternalLink, Link2, Paperclip } from 'lucide-react';
 
 type InlineMatch = {
-  type: 'image' | 'code' | 'bold' | 'link';
+  type: 'image' | 'code' | 'bold' | 'mark' | 'link';
   match: RegExpMatchArray;
 };
 
@@ -25,6 +25,55 @@ function isSafeImageSrc(src: string) {
   } catch {
     return false;
   }
+}
+
+function isSafeUrl(src: string) {
+  try {
+    const url = new URL(src);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function resolveVideoEmbed(src: string) {
+  if (!isSafeUrl(src)) return null;
+
+  const parsed = new URL(src);
+  const host = parsed.hostname.replace(/^www\./, '');
+
+  if (host === 'youtu.be') {
+    const id = parsed.pathname.replace('/', '').trim();
+    if (!id) return null;
+    return { type: 'iframe' as const, src: `https://www.youtube.com/embed/${id}` };
+  }
+
+  if (host === 'youtube.com' || host === 'm.youtube.com') {
+    const watchId = parsed.searchParams.get('v');
+    if (watchId) {
+      return { type: 'iframe' as const, src: `https://www.youtube.com/embed/${watchId}` };
+    }
+
+    const pathSegments = parsed.pathname.split('/').filter(Boolean);
+    if (pathSegments[0] === 'shorts' && pathSegments[1]) {
+      return { type: 'iframe' as const, src: `https://www.youtube.com/embed/${pathSegments[1]}` };
+    }
+    if (pathSegments[0] === 'embed' && pathSegments[1]) {
+      return { type: 'iframe' as const, src: `https://www.youtube.com/embed/${pathSegments[1]}` };
+    }
+  }
+
+  if (host === 'vimeo.com') {
+    const id = parsed.pathname.replace('/', '').trim();
+    if (!id) return null;
+    return { type: 'iframe' as const, src: `https://player.vimeo.com/video/${id}` };
+  }
+
+  if (/\.(mp4|webm|mov)(\?.*)?$/i.test(parsed.pathname)) {
+    return { type: 'video' as const, src };
+  }
+
+  return null;
 }
 
 function parseImageAlt(alt: string): ParsedImageAlt {
@@ -107,6 +156,86 @@ function MarkdownAttachment({ label, href }: { label: string; href: string }) {
   );
 }
 
+function getCompactLinkLabel(label: string, href: string) {
+  const trimmedLabel = label.trim();
+  const trimmedHref = href.trim();
+
+  if (trimmedLabel && trimmedLabel !== trimmedHref) {
+    return trimmedLabel;
+  }
+
+  if (!isSafeUrl(trimmedHref)) {
+    return trimmedLabel || trimmedHref;
+  }
+
+  const parsed = new URL(trimmedHref);
+  const host = parsed.hostname.replace(/^www\./, '');
+  const path = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '';
+  return `${host}${path}`;
+}
+
+function MarkdownInlineLink({ label, href }: { label: string; href: string }) {
+  const isInternal = href.startsWith('/');
+  const compactLabel = getCompactLinkLabel(label, href);
+
+  return (
+    <a
+      href={href}
+      className="inline-flex max-w-full items-center gap-1 rounded-md border border-border/60 bg-surface px-1.5 py-0.5 align-baseline text-[13px] font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-curi-pink"
+      {...(!isInternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      title={href}
+    >
+      <Link2 className="h-3 w-3 shrink-0" />
+      <span className="truncate">{compactLabel}</span>
+      {!isInternal && <ExternalLink className="h-3 w-3 shrink-0" />}
+    </a>
+  );
+}
+
+function MarkdownVideoEmbed({ src }: { src: string }) {
+  const resolved = resolveVideoEmbed(src.trim());
+
+  if (!resolved) {
+    return (
+      <a
+        href={src}
+        className="text-sm text-curi-pink hover:underline"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        영상 링크 열기
+      </a>
+    );
+  }
+
+  if (resolved.type === 'video') {
+    return (
+      <div className="my-4 overflow-hidden rounded-xl border border-border bg-background">
+        <video controls className="w-full" preload="metadata">
+          <source src={resolved.src} />
+          브라우저에서 이 영상을 재생할 수 없습니다.
+        </video>
+      </div>
+    );
+  }
+
+  return (
+    <div className="my-4 overflow-hidden rounded-xl border border-border bg-background">
+      <div className="aspect-video w-full">
+        <iframe
+          src={resolved.src}
+          title="Embedded video"
+          className="h-full w-full"
+          loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allowFullScreen
+        />
+      </div>
+    </div>
+  );
+}
+
 export function MarkdownRenderer({ content }: { content: string }) {
   const lines = content.split('\n');
   const elements: ReactNode[] = [];
@@ -126,12 +255,14 @@ export function MarkdownRenderer({ content }: { content: string }) {
       const imageMatch = remaining.match(/!\[([^\]]*)\]\(([^)]+)\)/);
       const codeMatch = remaining.match(/`([^`]+)`/);
       const boldMatch = remaining.match(/\*\*([^*]+)\*\*/);
+      const markMatch = remaining.match(/==([^=]+)==/);
       const linkMatch = remaining.match(/\[([^\]]+)\]\(([^)]+)\)/);
 
       const matches = [
         imageMatch ? { type: 'image', match: imageMatch } : null,
         codeMatch ? { type: 'code', match: codeMatch } : null,
         boldMatch ? { type: 'bold', match: boldMatch } : null,
+        markMatch ? { type: 'mark', match: markMatch } : null,
         linkMatch ? { type: 'link', match: linkMatch } : null,
       ]
         .filter((match): match is InlineMatch => match !== null)
@@ -166,6 +297,12 @@ export function MarkdownRenderer({ content }: { content: string }) {
             {first.match[1]}
           </strong>
         );
+      } else if (first.type === 'mark') {
+        parts.push(
+          <mark key={key++} className="rounded bg-yellow-200 px-0.5 text-text-primary">
+            {first.match[1]}
+          </mark>
+        );
       } else if (first.type === 'link') {
         const href = first.match[2];
 
@@ -181,11 +318,8 @@ export function MarkdownRenderer({ content }: { content: string }) {
           continue;
         }
 
-        const isInternal = href.startsWith('/');
         parts.push(
-          <a key={key++} href={href} className="text-curi-pink hover:underline" {...(!isInternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
-            {first.match[1]}
-          </a>
+          <MarkdownInlineLink key={key++} label={first.match[1]} href={href} />
         );
       }
 
@@ -197,6 +331,7 @@ export function MarkdownRenderer({ content }: { content: string }) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    const trimmedLine = line.trim();
 
     if (line.startsWith('```')) {
       if (!inCodeBlock) {
@@ -261,7 +396,16 @@ export function MarkdownRenderer({ content }: { content: string }) {
       continue;
     }
 
-    if (line.trim() === '') continue;
+    if (trimmedLine === '') continue;
+
+    const explicitVideoMatch = trimmedLine.match(/^@\[video\]\((https?:\/\/[^)\s]+)\)$/i);
+    const standaloneUrlMatch = trimmedLine.match(/^https?:\/\/\S+$/i);
+    const videoUrl = explicitVideoMatch?.[1] ?? standaloneUrlMatch?.[0] ?? null;
+
+    if (videoUrl && resolveVideoEmbed(videoUrl)) {
+      elements.push(<MarkdownVideoEmbed key={`video-${i}`} src={videoUrl} />);
+      continue;
+    }
 
     const attachmentOnlyMatch = line
       .trim()

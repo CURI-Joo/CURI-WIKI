@@ -164,6 +164,12 @@ function EditForm({
         )}
       </div>
 
+      {!showPreview && editorMode === 'markdown' && (
+        <p className="text-xs text-text-muted">
+          팁: 이미지 파일을 붙여넣거나 드래그해 바로 삽입할 수 있고, 형광펜은 <code className="font-mono">==텍스트==</code>, 링크는 <code className="font-mono">⌘/Ctrl + K</code>로 빠르게 넣을 수 있어요.
+        </p>
+      )}
+
       {showPreview ? (
         <div className="rounded-xl border border-border bg-surface p-6 min-h-[400px]">
           {content ? (

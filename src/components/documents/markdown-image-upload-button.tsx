@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
-import { Columns2, ImagePlus, Loader2, Paperclip } from 'lucide-react';
+import { Columns2, Highlighter, ImagePlus, Link2, Loader2, Paperclip, Video } from 'lucide-react';
 import {
   ACCEPT_ATTRIBUTE,
   ALLOWED_IMAGE_TYPES,
@@ -54,6 +54,27 @@ function buildMediaLayoutTemplate() {
   ].join('\n');
 }
 
+function isVideoUrl(url: string) {
+  const normalized = url.trim();
+  if (!normalized) return false;
+
+  try {
+    const parsed = new URL(normalized);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+
+    const host = parsed.hostname.replace(/^www\./, '');
+    if (host === 'youtu.be' || host === 'youtube.com' || host === 'm.youtube.com' || host === 'vimeo.com') {
+      return true;
+    }
+
+    return /\.(mp4|webm|mov)(\?.*)?$/i.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
 interface MarkdownImageUploadButtonProps {
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   content: string;
@@ -74,7 +95,42 @@ export function MarkdownImageUploadButton({
   const [uploadingKind, setUploadingKind] = useState<'image' | 'file' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const insertAsset = async (file: File, kind: 'image' | 'file') => {
+  const insertLink = useCallback((rawUrl?: string | null) => {
+    setError(null);
+
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const selectionStart = textarea.selectionStart ?? content.length;
+    const selectionEnd = textarea.selectionEnd ?? content.length;
+    const selectedText = content.slice(selectionStart, selectionEnd).trim();
+    const label = selectedText || '링크 텍스트';
+
+    const prompted = rawUrl ?? window.prompt('링크 URL을 입력하세요');
+    if (!prompted) return;
+
+    const href = prompted.trim();
+    if (!/^https?:\/\//i.test(href) && !href.startsWith('/')) {
+      setError('http(s):// 또는 / 로 시작하는 링크를 입력해 주세요.');
+      return;
+    }
+
+    const markdown = `[${label}](${href})`;
+    const nextCursor = selectionStart + markdown.length;
+
+    onContentChange((currentContent) => {
+      const before = currentContent.slice(0, selectionStart);
+      const after = currentContent.slice(selectionEnd);
+      return `${before}${markdown}${after}`;
+    });
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(nextCursor, nextCursor);
+    });
+  }, [content, onContentChange, textareaRef]);
+
+  const insertAsset = useCallback(async (file: File, kind: 'image' | 'file') => {
     setError(null);
     const selectionStart = textareaRef.current?.selectionStart ?? content.length;
     const selectionEnd = textareaRef.current?.selectionEnd ?? content.length;
@@ -165,7 +221,69 @@ export function MarkdownImageUploadButton({
         attachmentInputRef.current.value = '';
       }
     }
-  };
+  }, [content.length, documentId, onContentChange, textareaRef]);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const handlePaste = (event: ClipboardEvent) => {
+      if (uploadingKind) return;
+
+      const items = Array.from(event.clipboardData?.items ?? []);
+      const imageItem = items.find((item) => item.type.startsWith('image/'));
+      const file = imageItem?.getAsFile();
+
+      if (!file) return;
+
+      event.preventDefault();
+      void insertAsset(file, 'image');
+    };
+
+    const handleDrop = (event: DragEvent) => {
+      if (uploadingKind) return;
+
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      const image = files.find((file) => file.type.startsWith('image/'));
+
+      if (!image) return;
+
+      event.preventDefault();
+
+      const nextCursor = textarea.selectionStart ?? content.length;
+      textarea.focus();
+      textarea.setSelectionRange(nextCursor, nextCursor);
+      void insertAsset(image, 'image');
+    };
+
+    const handleDragOver = (event: DragEvent) => {
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      if (!files.some((file) => file.type.startsWith('image/'))) {
+        return;
+      }
+      event.preventDefault();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isLinkShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
+      if (!isLinkShortcut) return;
+
+      event.preventDefault();
+      insertLink();
+    };
+
+    textarea.addEventListener('paste', handlePaste);
+    textarea.addEventListener('drop', handleDrop);
+    textarea.addEventListener('dragover', handleDragOver);
+    textarea.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      textarea.removeEventListener('paste', handlePaste);
+      textarea.removeEventListener('drop', handleDrop);
+      textarea.removeEventListener('dragover', handleDragOver);
+      textarea.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [content.length, insertAsset, insertLink, textareaRef, uploadingKind]);
 
   const handleInsertLayoutTemplate = () => {
     setError(null);
@@ -204,6 +322,73 @@ export function MarkdownImageUploadButton({
     void insertAsset(file, 'file');
   };
 
+  const handleInsertVideoEmbed = () => {
+    setError(null);
+
+    const input = window.prompt('영상 URL을 입력하세요 (YouTube, Vimeo, mp4/webm)');
+    if (!input) return;
+
+    const url = input.trim();
+    if (!isVideoUrl(url)) {
+      setError('지원되지 않는 영상 주소입니다.');
+      return;
+    }
+
+    const selectionStart = textareaRef.current?.selectionStart ?? content.length;
+    const selectionEnd = textareaRef.current?.selectionEnd ?? content.length;
+    const markdown = `@[video](${url})`;
+
+    let nextCursor = selectionStart + markdown.length + 1;
+    onContentChange((currentContent) => {
+      const result = insertAtCursor(currentContent, selectionStart, selectionEnd, markdown);
+      nextCursor = result.nextCursor;
+      return result.nextContent;
+    });
+
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  const handleInsertHighlight = () => {
+    setError(null);
+
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const selectionStart = textarea.selectionStart ?? content.length;
+    const selectionEnd = textarea.selectionEnd ?? content.length;
+    const hasSelection = selectionEnd > selectionStart;
+
+    const highlighted = hasSelection
+      ? `==${content.slice(selectionStart, selectionEnd)}==`
+      : '==형광펜 텍스트==';
+
+    const nextCursor = selectionStart + highlighted.length;
+    onContentChange((currentContent) => {
+      const before = currentContent.slice(0, selectionStart);
+      const after = currentContent.slice(selectionEnd);
+      return `${before}${highlighted}${after}`;
+    });
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      if (hasSelection) {
+        textarea.setSelectionRange(nextCursor, nextCursor);
+        return;
+      }
+
+      const innerStart = selectionStart + 2;
+      const innerEnd = innerStart + '형광펜 텍스트'.length;
+      textarea.setSelectionRange(innerStart, innerEnd);
+    });
+  };
+
+  const handleInsertLink = () => {
+    insertLink();
+  };
+
   return (
     <div className="flex min-w-0 items-center gap-2">
       <button
@@ -231,6 +416,39 @@ export function MarkdownImageUploadButton({
       >
         <Columns2 className="h-3.5 w-3.5" />
         좌우
+      </button>
+      <button
+        type="button"
+        onClick={handleInsertVideoEmbed}
+        disabled={disabled || uploadingKind !== null}
+        title="영상 임베드 삽입"
+        aria-label="영상 임베드 삽입"
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
+      >
+        <Video className="h-3.5 w-3.5" />
+        영상
+      </button>
+      <button
+        type="button"
+        onClick={handleInsertHighlight}
+        disabled={disabled || uploadingKind !== null}
+        title="형광펜 강조"
+        aria-label="형광펜 강조"
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
+      >
+        <Highlighter className="h-3.5 w-3.5" />
+        형광펜
+      </button>
+      <button
+        type="button"
+        onClick={handleInsertLink}
+        disabled={disabled || uploadingKind !== null}
+        title="하이퍼링크 삽입 (⌘/Ctrl + K)"
+        aria-label="하이퍼링크 삽입"
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
+      >
+        <Link2 className="h-3.5 w-3.5" />
+        링크
       </button>
       <button
         type="button"

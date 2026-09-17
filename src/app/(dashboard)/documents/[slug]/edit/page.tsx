@@ -120,7 +120,7 @@ function EditForm({
         }
 
         const loaded = normalizeCategoryOptions(
-          data.map((category) => ({
+          data.map((category: { id: string; name: string; sort_order: number | null }) => ({
             id: String(category.id),
             name: String(category.name),
             sort_order: Number(category.sort_order ?? 0),

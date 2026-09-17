@@ -100,6 +100,7 @@ Object.defineProperty(window, 'localStorage', { value: mockLocalStorage, writabl
 - CVA (class-variance-authority)로 variant를 관리합니다
 - `cn()` 유틸리티로 클래스를 결합합니다
 - 디자인 토큰은 CSS 변수를 사용합니다 (`globals.css`)
+- 문서 화면 UI 규칙은 `docs/design-system.md`를 기준으로 맞춥니다
 
 ### Data Store 패턴
 

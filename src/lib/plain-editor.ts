@@ -7,7 +7,7 @@ export function markdownToPlainText(markdown: string): string {
   if (!markdown) return '';
 
   return markdown
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string) => `🖼️ ${alt || '이미지'}`)
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '')
     .replace(/\[📎\s+([^\]]+)\]\(([^)]+)\)/g, (_, label: string) => `📎 ${label}`)
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
@@ -17,8 +17,17 @@ export function markdownToPlainText(markdown: string): string {
     .replace(/^-\s\[(x| )\]\s+/gim, (_m, checked: string) => (checked.toLowerCase() === 'x' ? '☑ ' : '☐ '))
     .replace(/^[-*]\s+/gm, '')
     .replace(/^\d+\.\s+/gm, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+    .replace(/\n{3,}/g, '\n\n');
+}
+
+export function extractMarkdownImages(markdown: string) {
+  const matches = Array.from(markdown.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g));
+  return matches
+    .map((match) => ({
+      alt: (match[1] ?? '').trim() || '이미지',
+      src: (match[2] ?? '').trim(),
+    }))
+    .filter((item) => item.src.length > 0);
 }
 
 export function plainTextToMarkdown(plainText: string): string {
@@ -26,8 +35,7 @@ export function plainTextToMarkdown(plainText: string): string {
 
   return plainText
     .replace(/\r\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+    .replace(/\n{3,}/g, '\n\n');
 }
 
 export function buildSummaryFromMarkdown(markdown: string): string {

@@ -6,9 +6,14 @@ import { seedCategories } from '@/data/seed-categories';
 import { updateStoredDocument, useDocumentStore } from '@/lib/document-store';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MarkdownImageUploadButton } from '@/components/documents/markdown-image-upload-button';
-import { MarkdownRenderer } from '@/components/documents/markdown-renderer';
 import { DocumentAttachments } from '@/components/documents/document-attachments';
-import { buildSummaryFromMarkdown } from '@/lib/plain-editor';
+import {
+  buildSummaryFromMarkdown,
+  extractMarkdownImages,
+  markdownToPlainText,
+  plainTextToMarkdown,
+} from '@/lib/plain-editor';
+import Image from 'next/image';
 import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import type { Document } from '@/types';
@@ -16,11 +21,30 @@ import { isSecretCategoryId } from '@/lib/permissions';
 import { normalizeCategoryId } from '@/lib/category-migration';
 import { createClient } from '@/lib/supabase/client';
 import { slugify } from '@/lib/utils';
+import {
+  CategoryIcon,
+  CATEGORY_ICON_OPTIONS,
+  type CategoryIconName,
+} from '@/lib/category-icons';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 type CategoryOption = {
   id: string;
   databaseId: string;
   name: string;
+  icon: string;
   sort_order: number;
 };
 
@@ -36,6 +60,7 @@ function seedCategoryOptions(): CategoryOption[] {
       id: category.id,
       databaseId: category.id,
       name: category.name,
+      icon: category.icon,
       sort_order: category.sort_order,
     }))
   );
@@ -102,6 +127,9 @@ function EditForm({
     return source.filter((categoryItem) => !isSecretCategoryId(categoryItem.id));
   }, [categories, isAdmin]);
 
+  const selectedCategory = categoryOptions.find((category) => category.id === categoryId);
+  const simpleModeImages = useMemo(() => extractMarkdownImages(content), [content]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -111,7 +139,7 @@ function EditForm({
         const supabase = createClient();
         const { data, error } = await supabase
           .from('categories')
-          .select('id, name, sort_order')
+          .select('id, name, icon, sort_order')
           .order('sort_order', { ascending: true });
 
         if (error || !data || data.length === 0) {
@@ -123,7 +151,7 @@ function EditForm({
 
         const deduped = new Map<string, CategoryOption>();
 
-        for (const category of data as Array<{ id: string; name: string; sort_order: number | null }>) {
+        for (const category of data as Array<{ id: string; name: string; icon: string | null; sort_order: number | null }>) {
           const databaseId = String(category.id);
           const normalizedId = normalizeCategoryId(databaseId);
           const seed = seedCategories.find((seedCategory) => seedCategory.id === normalizedId);
@@ -134,11 +162,23 @@ function EditForm({
             id: normalizedId,
             databaseId,
             name: seed?.name ?? String(category.name),
+            icon: seed?.icon ?? String(category.icon ?? 'Building2'),
             sort_order: seed?.sort_order ?? Number(category.sort_order ?? 0),
           });
         }
 
-        const loaded = normalizeCategoryOptions(Array.from(deduped.values()));
+        const seedMap = new Map(
+          seedCategoryOptions().map((category) => [category.id, category])
+        );
+
+        for (const [normalizedId, category] of deduped.entries()) {
+          seedMap.set(normalizedId, {
+            ...seedMap.get(normalizedId),
+            ...category,
+          });
+        }
+
+        const loaded = normalizeCategoryOptions(Array.from(seedMap.values()));
 
         if (!mounted) return;
         setCategories(loaded);
@@ -222,10 +262,31 @@ function EditForm({
 
     const nextCategories = normalizeCategoryOptions([
       ...categoryOptions,
-      { id, databaseId: id, name, sort_order: nextSortOrder },
+      { id, databaseId: id, name, icon: 'FolderKanban', sort_order: nextSortOrder },
     ]);
     setCategories(nextCategories);
     setCategoryId(id);
+  };
+
+  const handleUpdateCategoryIcon = async (nextIcon: CategoryIconName) => {
+    if (!isAdmin) return;
+    const target = categoryOptions.find((category) => category.id === categoryId);
+    if (!target) return;
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('categories')
+      .update({ icon: nextIcon })
+      .eq('id', target.databaseId);
+
+    if (error) {
+      alert(`카테고리 아이콘 변경 실패: ${error.message}`);
+      return;
+    }
+
+    setCategories((current) => current.map((category) => (
+      category.id === categoryId ? { ...category, icon: nextIcon } : category
+    )));
   };
 
   const handleDeleteCategory = async () => {
@@ -281,28 +342,72 @@ function EditForm({
 
       <input
         type="text"
+        placeholder="Title"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         className="w-full text-2xl font-bold bg-transparent border-none text-text-primary focus:outline-none"
       />
 
       <div className="max-w-xl space-y-2">
-        <label className="block text-xs text-text-muted">카테고리</label>
         <div className="flex items-center gap-2">
-          <select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            disabled={categoryLoading}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-sm text-text-primary focus:outline-none focus:border-curi-pink/50 disabled:opacity-60"
-          >
-            {categoryOptions.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-          </select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                disabled={!isAdmin}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-elevated text-text-secondary transition-colors hover:bg-surface hover:text-text-primary disabled:cursor-default disabled:opacity-100"
+                title={isAdmin ? '카테고리 아이콘 선택' : '카테고리 아이콘'}
+                aria-label="카테고리 아이콘 선택"
+              >
+                <CategoryIcon iconName={selectedCategory?.icon} className="h-5 w-5" />
+              </button>
+            </DropdownMenuTrigger>
+            {isAdmin && (
+              <DropdownMenuContent align="start" className="grid grid-cols-5 gap-1 p-2">
+                {CATEGORY_ICON_OPTIONS.map((option) => {
+                  const Icon = option.icon;
+                  const active = selectedCategory?.icon === option.name;
+                  return (
+                    <DropdownMenuItem
+                      key={option.name}
+                      onSelect={(event) => {
+                        event.preventDefault();
+                        void handleUpdateCategoryIcon(option.name);
+                      }}
+                      className={`flex h-10 w-10 items-center justify-center rounded-md p-0 ${active ? 'bg-surface-elevated text-curi-pink' : ''}`}
+                      title={option.label}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            )}
+          </DropdownMenu>
+          <div className="w-full">
+            <Select
+              value={categoryId}
+              onValueChange={setCategoryId}
+              disabled={categoryLoading}
+            >
+              <SelectTrigger className="h-10 border-0 bg-surface-elevated px-4 text-base shadow-none">
+                <SelectValue placeholder="카테고리를 선택하세요" />
+              </SelectTrigger>
+              <SelectContent className="border-0 shadow-2xl">
+                {categoryOptions.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {isAdmin && (
             <>
               <button
                 type="button"
                 onClick={handleCreateCategory}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-elevated text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
                 title="카테고리 추가"
                 aria-label="카테고리 추가"
               >
@@ -312,7 +417,7 @@ function EditForm({
                 type="button"
                 onClick={handleDeleteCategory}
                 disabled={PROTECTED_CATEGORY_IDS.has(categoryId)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-secondary transition-colors hover:bg-surface-elevated hover:text-error disabled:pointer-events-none disabled:opacity-40"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-elevated text-text-secondary transition-colors hover:bg-surface hover:text-error disabled:pointer-events-none disabled:opacity-40"
                 title="카테고리 삭제"
                 aria-label="카테고리 삭제"
               >
@@ -332,25 +437,56 @@ function EditForm({
             Markdown
           </button>
         </div>
-        {editorMode === 'markdown' && (
-          <MarkdownImageUploadButton
-            textareaRef={textareaRef}
-            content={content}
-            onContentChange={setContent}
-            documentId={doc.id}
-            disabled={saving}
-          />
-        )}
+        <MarkdownImageUploadButton
+          textareaRef={textareaRef}
+          content={content}
+          onContentChange={setContent}
+          documentId={doc.id}
+          disabled={saving}
+        />
       </div>
 
       {editorMode === 'simple' ? (
-        <div className="rounded-xl border border-border bg-surface p-6 min-h-[400px]">
-          {content ? (
-            <MarkdownRenderer content={content} />
-          ) : (
-            <p className="text-sm text-text-muted leading-relaxed">내용이 아직 없습니다. Markdown 탭에서 작성한 내용이 여기서 읽기 좋은 형태로 표시됩니다.</p>
+        <>
+          <p className="text-xs text-text-muted">
+            간편 편집에서도 바로 입력하고, 위 버튼으로 이미지/링크/형광펜/파일을 삽입할 수 있어요.
+          </p>
+          {simpleModeImages.length > 0 && (
+            <div className="space-y-2 rounded-xl border border-border bg-surface p-3">
+              <p className="text-xs font-medium text-text-muted">첨부된 이미지</p>
+              <div className="space-y-3">
+                {simpleModeImages.map((image, index) => {
+                  const src = image.src.trim();
+                  const isValidSrc = src.startsWith('/') || /^https?:\/\//.test(src);
+                  if (!isValidSrc) return null;
+
+                  return (
+                    <figure key={`${src}-${index}`} className="overflow-hidden rounded-lg border border-border bg-background">
+                      <Image
+                        src={src}
+                        alt={image.alt || '첨부 이미지'}
+                        width={1200}
+                        height={800}
+                        unoptimized
+                        className="h-auto w-full object-contain"
+                      />
+                    </figure>
+                  );
+                })}
+              </div>
+            </div>
           )}
-        </div>
+          <textarea
+            ref={textareaRef}
+            value={markdownToPlainText(content)}
+            onChange={(e) => {
+              const nextPlain = e.target.value;
+              setContent(plainTextToMarkdown(nextPlain));
+            }}
+            placeholder="내용을 자유롭게 작성하세요..."
+            className="w-full min-h-[260px] p-4 rounded-xl border border-border bg-surface text-base text-text-primary placeholder:text-text-muted leading-relaxed resize-y focus:outline-none focus:border-curi-pink/50"
+          />
+        </>
       ) : (
         <>
           <p className="text-xs text-text-muted">

@@ -1,6 +1,6 @@
 const LEGACY_CATEGORY_ID_MAP: Record<string, string> = {
   'cat-curi-ai': 'cat-company',
-  'cat-wame': 'cat-company',
+  'cat-wame': 'cat-projects',
 };
 
 const DATABASE_CATEGORY_ID_FALLBACK_MAP: Record<string, string> = {
@@ -10,7 +10,7 @@ const DATABASE_CATEGORY_ID_FALLBACK_MAP: Record<string, string> = {
 
 const LEGACY_CATEGORY_SLUG_MAP: Record<string, string> = {
   'curi-ai': 'company',
-  wame: 'company',
+  wame: 'projects',
   etc: 'guides',
 };
 

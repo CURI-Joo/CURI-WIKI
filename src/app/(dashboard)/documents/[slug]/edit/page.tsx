@@ -19,6 +19,7 @@ import { slugify } from '@/lib/utils';
 
 type CategoryOption = {
   id: string;
+  databaseId: string;
   name: string;
   sort_order: number;
 };
@@ -33,6 +34,7 @@ function seedCategoryOptions(): CategoryOption[] {
   return normalizeCategoryOptions(
     seedCategories.map((category) => ({
       id: category.id,
+      databaseId: category.id,
       name: category.name,
       sort_order: category.sort_order,
     }))
@@ -119,13 +121,24 @@ function EditForm({
           return;
         }
 
-        const loaded = normalizeCategoryOptions(
-          data.map((category: { id: string; name: string; sort_order: number | null }) => ({
-            id: String(category.id),
-            name: String(category.name),
-            sort_order: Number(category.sort_order ?? 0),
-          }))
-        );
+        const deduped = new Map<string, CategoryOption>();
+
+        for (const category of data as Array<{ id: string; name: string; sort_order: number | null }>) {
+          const databaseId = String(category.id);
+          const normalizedId = normalizeCategoryId(databaseId);
+          const seed = seedCategories.find((seedCategory) => seedCategory.id === normalizedId);
+
+          if (deduped.has(normalizedId)) continue;
+
+          deduped.set(normalizedId, {
+            id: normalizedId,
+            databaseId,
+            name: seed?.name ?? String(category.name),
+            sort_order: seed?.sort_order ?? Number(category.sort_order ?? 0),
+          });
+        }
+
+        const loaded = normalizeCategoryOptions(Array.from(deduped.values()));
 
         if (!mounted) return;
         setCategories(loaded);
@@ -209,7 +222,7 @@ function EditForm({
 
     const nextCategories = normalizeCategoryOptions([
       ...categoryOptions,
-      { id, name, sort_order: nextSortOrder },
+      { id, databaseId: id, name, sort_order: nextSortOrder },
     ]);
     setCategories(nextCategories);
     setCategoryId(id);
@@ -234,7 +247,7 @@ function EditForm({
     const { count, error: countError } = await supabase
       .from('documents')
       .select('id', { count: 'exact', head: true })
-      .eq('category_id', categoryId);
+      .eq('category_id', target.databaseId);
 
     if (countError) {
       alert(`카테고리 사용 여부 확인 실패: ${countError.message}`);
@@ -246,7 +259,7 @@ function EditForm({
       return;
     }
 
-    const { error } = await supabase.from('categories').delete().eq('id', categoryId);
+    const { error } = await supabase.from('categories').delete().eq('id', target.databaseId);
     if (error) {
       alert(`카테고리 삭제 실패: ${error.message}`);
       return;

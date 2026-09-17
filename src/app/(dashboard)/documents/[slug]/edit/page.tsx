@@ -7,13 +7,7 @@ import { updateStoredDocument, useDocumentStore } from '@/lib/document-store';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MarkdownImageUploadButton } from '@/components/documents/markdown-image-upload-button';
 import { DocumentAttachments } from '@/components/documents/document-attachments';
-import {
-  buildSummaryFromMarkdown,
-  extractMarkdownImages,
-  markdownToPlainText,
-  plainTextToMarkdown,
-} from '@/lib/plain-editor';
-import Image from 'next/image';
+import { buildSummaryFromMarkdown } from '@/lib/plain-editor';
 import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import type { Document } from '@/types';
@@ -39,6 +33,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { NotionLikeEditor } from '@/components/documents/notion-like-editor';
 
 type CategoryOption = {
   id: string;
@@ -128,7 +123,6 @@ function EditForm({
   }, [categories, isAdmin]);
 
   const selectedCategory = categoryOptions.find((category) => category.id === categoryId);
-  const simpleModeImages = useMemo(() => extractMarkdownImages(content), [content]);
 
   useEffect(() => {
     let mounted = true;
@@ -437,54 +431,28 @@ function EditForm({
             Markdown
           </button>
         </div>
-        <MarkdownImageUploadButton
-          textareaRef={textareaRef}
-          content={content}
-          onContentChange={setContent}
-          documentId={doc.id}
-          disabled={saving}
-        />
+        {editorMode === 'markdown' && (
+          <MarkdownImageUploadButton
+            textareaRef={textareaRef}
+            content={content}
+            onContentChange={setContent}
+            documentId={doc.id}
+            disabled={saving}
+          />
+        )}
       </div>
 
       {editorMode === 'simple' ? (
         <>
           <p className="text-xs text-text-muted">
-            간편 편집에서도 바로 입력하고, 위 버튼으로 이미지/링크/형광펜/파일을 삽입할 수 있어요.
+            노션처럼 블록 기반으로 바로 입력하고, 이미지/링크/형광펜/파일을 문단 사이에 삽입할 수 있어요.
           </p>
-          {simpleModeImages.length > 0 && (
-            <div className="space-y-2 rounded-xl border border-border bg-surface p-3">
-              <p className="text-xs font-medium text-text-muted">첨부된 이미지</p>
-              <div className="space-y-3">
-                {simpleModeImages.map((image, index) => {
-                  const src = image.src.trim();
-                  const isValidSrc = src.startsWith('/') || /^https?:\/\//.test(src);
-                  if (!isValidSrc) return null;
-
-                  return (
-                    <figure key={`${src}-${index}`} className="overflow-hidden rounded-lg border border-border bg-background">
-                      <Image
-                        src={src}
-                        alt={image.alt || '첨부 이미지'}
-                        width={1200}
-                        height={800}
-                        unoptimized
-                        className="h-auto w-full object-contain"
-                      />
-                    </figure>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          <textarea
-            ref={textareaRef}
-            value={markdownToPlainText(content)}
-            onChange={(e) => {
-              const nextPlain = e.target.value;
-              setContent(plainTextToMarkdown(nextPlain));
-            }}
+          <NotionLikeEditor
+            value={content}
+            onChange={setContent}
+            documentId={doc.id}
+            disabled={saving}
             placeholder="내용을 자유롭게 작성하세요..."
-            className="w-full min-h-[260px] p-4 rounded-xl border border-border bg-surface text-base text-text-primary placeholder:text-text-muted leading-relaxed resize-y focus:outline-none focus:border-curi-pink/50"
           />
         </>
       ) : (

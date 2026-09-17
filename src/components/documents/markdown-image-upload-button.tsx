@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
-import { Columns2, Highlighter, ImagePlus, Link2, Loader2, Paperclip, Video } from 'lucide-react';
+import { Columns2, Highlighter, ImagePlus, Link2, Loader2, Paperclip } from 'lucide-react';
 import {
   ACCEPT_ATTRIBUTE,
   ALLOWED_IMAGE_TYPES,
@@ -52,27 +52,6 @@ function buildMediaLayoutTemplate() {
     '| --- | --- |',
     '| ![회사 아이콘|small|left](/curi-logo.png) | [회사 아이콘 파일 다운로드](/curi-logo.png) |',
   ].join('\n');
-}
-
-function isVideoUrl(url: string) {
-  const normalized = url.trim();
-  if (!normalized) return false;
-
-  try {
-    const parsed = new URL(normalized);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return false;
-    }
-
-    const host = parsed.hostname.replace(/^www\./, '');
-    if (host === 'youtu.be' || host === 'youtube.com' || host === 'm.youtube.com' || host === 'vimeo.com') {
-      return true;
-    }
-
-    return /\.(mp4|webm|mov)(\?.*)?$/i.test(parsed.pathname);
-  } catch {
-    return false;
-  }
 }
 
 interface MarkdownImageUploadButtonProps {
@@ -322,35 +301,6 @@ export function MarkdownImageUploadButton({
     void insertAsset(file, 'file');
   };
 
-  const handleInsertVideoEmbed = () => {
-    setError(null);
-
-    const input = window.prompt('영상 URL을 입력하세요 (YouTube, Vimeo, mp4/webm)');
-    if (!input) return;
-
-    const url = input.trim();
-    if (!isVideoUrl(url)) {
-      setError('지원되지 않는 영상 주소입니다.');
-      return;
-    }
-
-    const selectionStart = textareaRef.current?.selectionStart ?? content.length;
-    const selectionEnd = textareaRef.current?.selectionEnd ?? content.length;
-    const markdown = `@[video](${url})`;
-
-    let nextCursor = selectionStart + markdown.length + 1;
-    onContentChange((currentContent) => {
-      const result = insertAtCursor(currentContent, selectionStart, selectionEnd, markdown);
-      nextCursor = result.nextCursor;
-      return result.nextContent;
-    });
-
-    requestAnimationFrame(() => {
-      textareaRef.current?.focus();
-      textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
-    });
-  };
-
   const handleInsertHighlight = () => {
     setError(null);
 
@@ -416,17 +366,6 @@ export function MarkdownImageUploadButton({
       >
         <Columns2 className="h-3.5 w-3.5" />
         좌우
-      </button>
-      <button
-        type="button"
-        onClick={handleInsertVideoEmbed}
-        disabled={disabled || uploadingKind !== null}
-        title="영상 임베드 삽입"
-        aria-label="영상 임베드 삽입"
-        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
-      >
-        <Video className="h-3.5 w-3.5" />
-        영상
       </button>
       <button
         type="button"

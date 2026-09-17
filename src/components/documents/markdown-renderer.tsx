@@ -36,45 +36,6 @@ function isSafeUrl(src: string) {
   }
 }
 
-function resolveVideoEmbed(src: string) {
-  if (!isSafeUrl(src)) return null;
-
-  const parsed = new URL(src);
-  const host = parsed.hostname.replace(/^www\./, '');
-
-  if (host === 'youtu.be') {
-    const id = parsed.pathname.replace('/', '').trim();
-    if (!id) return null;
-    return { type: 'iframe' as const, src: `https://www.youtube.com/embed/${id}` };
-  }
-
-  if (host === 'youtube.com' || host === 'm.youtube.com') {
-    const watchId = parsed.searchParams.get('v');
-    if (watchId) {
-      return { type: 'iframe' as const, src: `https://www.youtube.com/embed/${watchId}` };
-    }
-
-    const pathSegments = parsed.pathname.split('/').filter(Boolean);
-    if (pathSegments[0] === 'shorts' && pathSegments[1]) {
-      return { type: 'iframe' as const, src: `https://www.youtube.com/embed/${pathSegments[1]}` };
-    }
-    if (pathSegments[0] === 'embed' && pathSegments[1]) {
-      return { type: 'iframe' as const, src: `https://www.youtube.com/embed/${pathSegments[1]}` };
-    }
-  }
-
-  if (host === 'vimeo.com') {
-    const id = parsed.pathname.replace('/', '').trim();
-    if (!id) return null;
-    return { type: 'iframe' as const, src: `https://player.vimeo.com/video/${id}` };
-  }
-
-  if (/\.(mp4|webm|mov)(\?.*)?$/i.test(parsed.pathname)) {
-    return { type: 'video' as const, src };
-  }
-
-  return null;
-}
 
 function parseImageAlt(alt: string): ParsedImageAlt {
   const raw = alt.trim();
@@ -189,50 +150,6 @@ function MarkdownInlineLink({ label, href }: { label: string; href: string }) {
       <span className="truncate">{compactLabel}</span>
       {!isInternal && <ExternalLink className="h-3 w-3 shrink-0" />}
     </a>
-  );
-}
-
-function MarkdownVideoEmbed({ src }: { src: string }) {
-  const resolved = resolveVideoEmbed(src.trim());
-
-  if (!resolved) {
-    return (
-      <a
-        href={src}
-        className="text-sm text-curi-pink hover:underline"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        영상 링크 열기
-      </a>
-    );
-  }
-
-  if (resolved.type === 'video') {
-    return (
-      <div className="my-4 overflow-hidden rounded-xl border border-border bg-background">
-        <video controls className="w-full" preload="metadata">
-          <source src={resolved.src} />
-          브라우저에서 이 영상을 재생할 수 없습니다.
-        </video>
-      </div>
-    );
-  }
-
-  return (
-    <div className="my-4 overflow-hidden rounded-xl border border-border bg-background">
-      <div className="aspect-video w-full">
-        <iframe
-          src={resolved.src}
-          title="Embedded video"
-          className="h-full w-full"
-          loading="lazy"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          referrerPolicy="strict-origin-when-cross-origin"
-          allowFullScreen
-        />
-      </div>
-    </div>
   );
 }
 
@@ -397,15 +314,6 @@ export function MarkdownRenderer({ content }: { content: string }) {
     }
 
     if (trimmedLine === '') continue;
-
-    const explicitVideoMatch = trimmedLine.match(/^@\[video\]\((https?:\/\/[^)\s]+)\)$/i);
-    const standaloneUrlMatch = trimmedLine.match(/^https?:\/\/\S+$/i);
-    const videoUrl = explicitVideoMatch?.[1] ?? standaloneUrlMatch?.[0] ?? null;
-
-    if (videoUrl && resolveVideoEmbed(videoUrl)) {
-      elements.push(<MarkdownVideoEmbed key={`video-${i}`} src={videoUrl} />);
-      continue;
-    }
 
     const attachmentOnlyMatch = line
       .trim()

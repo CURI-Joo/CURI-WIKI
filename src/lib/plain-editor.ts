@@ -30,3 +30,11 @@ export function plainTextToMarkdown(plainText: string): string {
     .trim();
 }
 
+export function buildSummaryFromMarkdown(markdown: string): string {
+  const plainText = markdownToPlainText(markdown)
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!plainText) return '요약 없음';
+  return plainText.slice(0, 160);
+}

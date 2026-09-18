@@ -9,11 +9,66 @@ type InlineMatch = {
 };
 
 type ImageLayout = 'left' | 'center' | 'right';
+type ImageSizeLevel = 1 | 2 | 3 | 4;
+
+const IMAGE_WIDTH_BY_LEVEL: Record<ImageSizeLevel, number> = {
+  1: 180,
+  2: 320,
+  3: 520,
+  4: 900,
+};
+
+const DEFAULT_IMAGE_SIZE_LEVEL: ImageSizeLevel = 4;
+const IMAGE_OFFSET_LIMIT = 280;
+const IMAGE_MIN_WIDTH = 120;
+const IMAGE_MAX_WIDTH = 1100;
+
+function clampOffset(value: number) {
+  return Math.max(-IMAGE_OFFSET_LIMIT, Math.min(IMAGE_OFFSET_LIMIT, value));
+}
+
+function clampImageWidth(value: number) {
+  return Math.max(IMAGE_MIN_WIDTH, Math.min(IMAGE_MAX_WIDTH, value));
+}
+
+function parseImageSizeOption(options: string[]): ImageSizeLevel {
+  const sizeOption = options.find((option) => option.startsWith('size'));
+  if (sizeOption) {
+    const parsed = Number(sizeOption.replace(/[^0-9]/g, ''));
+    if (parsed >= 1 && parsed <= 4) {
+      return parsed as ImageSizeLevel;
+    }
+  }
+
+  if (options.some((option) => option === 'small' || option === 'tiny' || option === '작게')) {
+    return 1;
+  }
+
+  return DEFAULT_IMAGE_SIZE_LEVEL;
+}
+
+function parseImageOffsetOption(options: string[]) {
+  const offsetOption = options.find((option) => /^x-?\d+$/i.test(option));
+  if (!offsetOption) return 0;
+  const parsed = Number(offsetOption.slice(1));
+  if (!Number.isFinite(parsed)) return 0;
+  return clampOffset(parsed);
+}
+
+function parseImageWidthOption(options: string[]) {
+  const widthOption = options.find((option) => /^w\d+$/i.test(option));
+  if (!widthOption) return null;
+  const parsed = Number(widthOption.slice(1));
+  if (!Number.isFinite(parsed)) return null;
+  return clampImageWidth(parsed);
+}
 
 type ParsedImageAlt = {
   label: string;
-  small: boolean;
+  width: number;
   layout: ImageLayout;
+  offset: number;
+  wrap: boolean;
 };
 
 function isSafeImageSrc(src: string) {
@@ -40,7 +95,13 @@ function isSafeUrl(src: string) {
 function parseImageAlt(alt: string): ParsedImageAlt {
   const raw = alt.trim();
   if (!raw) {
-    return { label: '', small: false, layout: 'center' };
+    return {
+      label: '',
+      width: IMAGE_WIDTH_BY_LEVEL[DEFAULT_IMAGE_SIZE_LEVEL],
+      layout: 'center',
+      offset: 0,
+      wrap: false,
+    };
   }
 
   const [labelPart, ...optionParts] = raw.split('|');
@@ -53,12 +114,17 @@ function parseImageAlt(alt: string): ParsedImageAlt {
     layout = 'right';
   }
 
-  const small = options.some((option) => option === 'small' || option === 'tiny' || option === '작게');
+  const size = parseImageSizeOption(options);
+  const width = parseImageWidthOption(options) ?? IMAGE_WIDTH_BY_LEVEL[size];
+  const offset = parseImageOffsetOption(options);
+  const wrap = options.some((option) => option === 'wrap' || option === 'flow' || option === '옆글');
 
   return {
     label: labelPart.trim(),
-    small,
+    width,
     layout,
+    offset,
+    wrap,
   };
 }
 
@@ -72,9 +138,15 @@ function MarkdownImage({ alt, src }: { alt: string; src: string }) {
       ? 'ml-auto'
       : 'mx-auto';
 
-  const imageClass = parsedAlt.small
-    ? 'max-h-[120px] w-auto max-w-[120px] object-contain'
-    : 'max-h-[560px] w-full object-contain';
+  const widthPx = parsedAlt.width;
+  const imageClass = 'max-h-[560px] h-auto w-full object-contain';
+  const imageWrapperStyle = {
+    width: `min(100%, ${widthPx}px)`,
+    transform: parsedAlt.wrap ? undefined : (parsedAlt.offset === 0 ? undefined : `translateX(${parsedAlt.offset}px)`),
+    float: parsedAlt.wrap && parsedAlt.layout !== 'center' ? parsedAlt.layout : undefined,
+    marginLeft: parsedAlt.wrap && parsedAlt.layout === 'right' ? '12px' : undefined,
+    marginRight: parsedAlt.wrap && parsedAlt.layout === 'left' ? '12px' : undefined,
+  };
 
   if (!isSafeImageSrc(safeSrc)) {
     return (
@@ -85,7 +157,10 @@ function MarkdownImage({ alt, src }: { alt: string; src: string }) {
   }
 
   return (
-    <span className={`my-4 block w-fit max-w-full overflow-hidden rounded-lg border border-border bg-background ${wrapperAlignClass}`}>
+    <span
+      className={`my-4 block max-w-full overflow-hidden rounded-lg border border-border bg-background ${wrapperAlignClass}`}
+      style={imageWrapperStyle}
+    >
       <img
         src={safeSrc}
         alt={parsedAlt.label}

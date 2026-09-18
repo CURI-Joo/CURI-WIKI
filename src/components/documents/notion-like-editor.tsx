@@ -14,6 +14,93 @@ import {
 import { formatFileSize } from '@/lib/utils';
 
 type ImageLayout = 'left' | 'center' | 'right';
+type ImageSizeLevel = 1 | 2 | 3 | 4;
+type ImageResizeMode = 'e' | 'w' | 'n' | 's' | 'ne' | 'nw' | 'se' | 'sw';
+
+const IMAGE_WIDTH_BY_LEVEL: Record<ImageSizeLevel, number> = {
+  1: 180,
+  2: 320,
+  3: 520,
+  4: 900,
+};
+
+const DEFAULT_IMAGE_SIZE_LEVEL: ImageSizeLevel = 4;
+const IMAGE_OFFSET_LIMIT = 280;
+const IMAGE_MIN_WIDTH = 120;
+const IMAGE_MAX_WIDTH = 1100;
+const IMAGE_RESIZE_EDGE_THRESHOLD = 24;
+const IMAGE_WRAP_DEFAULT_WIDTH = 360;
+
+function clampImageOffset(value: number) {
+  return Math.max(-IMAGE_OFFSET_LIMIT, Math.min(IMAGE_OFFSET_LIMIT, value));
+}
+
+function clampImageWidth(value: number) {
+  return Math.max(IMAGE_MIN_WIDTH, Math.min(IMAGE_MAX_WIDTH, value));
+}
+
+function normalizeImageSize(value: number): ImageSizeLevel {
+  if (value >= 1 && value <= 4) {
+    return value as ImageSizeLevel;
+  }
+  return DEFAULT_IMAGE_SIZE_LEVEL;
+}
+
+function parseImageWidthOption(options: string[]) {
+  const widthOption = options.find((option) => /^w\d+$/i.test(option));
+  if (!widthOption) return null;
+  const parsed = Number(widthOption.slice(1));
+  if (!Number.isFinite(parsed)) return null;
+  return clampImageWidth(parsed);
+}
+
+function getResizeModeFromPointer(rect: DOMRect, clientX: number, clientY: number): ImageResizeMode | null {
+  const nearLeft = Math.abs(clientX - rect.left) <= IMAGE_RESIZE_EDGE_THRESHOLD;
+  const nearRight = Math.abs(clientX - rect.right) <= IMAGE_RESIZE_EDGE_THRESHOLD;
+  const nearTop = Math.abs(clientY - rect.top) <= IMAGE_RESIZE_EDGE_THRESHOLD;
+  const nearBottom = Math.abs(clientY - rect.bottom) <= IMAGE_RESIZE_EDGE_THRESHOLD;
+
+  if (nearTop && nearLeft) return 'nw';
+  if (nearTop && nearRight) return 'ne';
+  if (nearBottom && nearLeft) return 'sw';
+  if (nearBottom && nearRight) return 'se';
+  if (nearLeft) return 'w';
+  if (nearRight) return 'e';
+  if (nearTop) return 'n';
+  if (nearBottom) return 's';
+  return null;
+}
+
+function getResizeCursor(mode: ImageResizeMode) {
+  switch (mode) {
+    case 'e':
+    case 'w':
+      return 'ew-resize';
+    case 'n':
+    case 's':
+      return 'ns-resize';
+    case 'nw':
+    case 'se':
+      return 'nwse-resize';
+    case 'ne':
+    case 'sw':
+      return 'nesw-resize';
+    default:
+      return 'grab';
+  }
+}
+
+function getResizeDelta(mode: ImageResizeMode, deltaX: number, deltaY: number) {
+  if (mode.length === 2) {
+    const horizontal = mode.includes('e') ? deltaX : -deltaX;
+    const vertical = mode.includes('s') ? deltaY : -deltaY;
+    return (horizontal + vertical) / 2;
+  }
+  if (mode === 'e') return deltaX;
+  if (mode === 'w') return -deltaX;
+  if (mode === 's') return deltaY;
+  return -deltaY;
+}
 
 type NotionLikeEditorProps = {
   value: string;
@@ -40,6 +127,10 @@ function isSafeUrl(src: string) {
   return /^https?:\/\//i.test(src) || src.startsWith('/');
 }
 
+function isSafeImageUrl(src: string) {
+  return isSafeUrl(src) || src.startsWith('data:image/');
+}
+
 function getImageAlt(fileName: string) {
   return fileName.replace(/\.[^.]+$/, '').trim() || 'image';
 }
@@ -54,6 +145,30 @@ function getAttachmentLabel(fileName: string, fileSize: number) {
   return `${safeName} · ${formatFileSize(fileSize)}`;
 }
 
+function parseImageSizeOption(options: string[]): ImageSizeLevel {
+  const sizeOption = options.find((option) => option.startsWith('size'));
+  if (sizeOption) {
+    const parsed = Number(sizeOption.replace(/[^0-9]/g, ''));
+    if (parsed >= 1 && parsed <= 4) {
+      return parsed as ImageSizeLevel;
+    }
+  }
+
+  if (options.some((option) => option === 'small' || option === 'tiny' || option === '작게')) {
+    return 1;
+  }
+
+  return DEFAULT_IMAGE_SIZE_LEVEL;
+}
+
+function parseImageOffsetOption(options: string[]) {
+  const offsetOption = options.find((option) => /^x-?\d+$/i.test(option));
+  if (!offsetOption) return 0;
+  const parsed = Number(offsetOption.slice(1));
+  if (!Number.isFinite(parsed)) return 0;
+  return clampImageOffset(parsed);
+}
+
 function parseImageAlt(alt: string) {
   const raw = alt.trim();
   const [labelPart, ...optionParts] = raw.split('|');
@@ -66,32 +181,68 @@ function parseImageAlt(alt: string) {
     layout = 'right';
   }
 
-  const small = options.some((option) => option === 'small' || option === 'tiny' || option === '작게');
+  const size = parseImageSizeOption(options);
+  const width = parseImageWidthOption(options);
+  const offset = parseImageOffsetOption(options);
+  const wrap = options.some((option) => option === 'wrap' || option === 'flow' || option === '옆글');
 
   return {
     label: labelPart.trim(),
     layout,
-    small,
+    size,
+    width,
+    offset,
+    wrap,
   };
 }
 
 function applyImageFigureStyle(figure: HTMLElement) {
   const align = (figure.dataset.align as ImageLayout | undefined) ?? 'center';
-  const small = figure.dataset.small === 'true';
+  const sizeValue = Number(figure.dataset.size ?? `${DEFAULT_IMAGE_SIZE_LEVEL}`);
+  const size = normalizeImageSize(sizeValue);
+  const rawWidth = Number(figure.dataset.width ?? '');
+  const widthPx = Number.isFinite(rawWidth) && rawWidth > 0
+    ? clampImageWidth(rawWidth)
+    : IMAGE_WIDTH_BY_LEVEL[size];
+  figure.dataset.width = `${widthPx}`;
+  const offset = clampImageOffset(Number(figure.dataset.offset ?? '0') || 0);
+  const selected = figure.dataset.selected === 'true';
+  const resizing = figure.dataset.resizing === 'true';
+  const resizeMode = (figure.dataset.resizeMode as ImageResizeMode | undefined) ?? null;
+  const wrap = figure.dataset.wrap === 'true';
 
   figure.style.display = 'block';
-  figure.style.width = small ? 'fit-content' : '100%';
+  figure.style.position = 'relative';
+  figure.style.width = `min(100%, ${widthPx}px)`;
   figure.style.maxWidth = '100%';
   figure.style.marginTop = '12px';
   figure.style.marginBottom = '12px';
+  figure.style.transform = wrap ? '' : (offset === 0 ? '' : `translateX(${offset}px)`);
+  figure.style.transition = figure.dataset.dragging === 'true' || resizing ? 'none' : 'transform 120ms ease';
+  if (figure.dataset.dragging === 'true') {
+    figure.style.cursor = 'grabbing';
+  } else if ((resizing || resizeMode) && resizeMode) {
+    figure.style.cursor = getResizeCursor(resizeMode);
+  } else {
+    figure.style.cursor = 'grab';
+  }
 
-  if (align === 'left') {
+  if (wrap && align !== 'center') {
+    figure.style.float = align;
+    figure.style.marginLeft = align === 'left' ? '0' : '12px';
+    figure.style.marginRight = align === 'right' ? '0' : '12px';
+  } else {
+    figure.style.float = 'none';
+    figure.style.clear = 'none';
+  }
+
+  if (!wrap && align === 'left') {
     figure.style.marginLeft = '0';
     figure.style.marginRight = 'auto';
-  } else if (align === 'right') {
+  } else if (!wrap && align === 'right') {
     figure.style.marginLeft = 'auto';
     figure.style.marginRight = '0';
-  } else {
+  } else if (!wrap) {
     figure.style.marginLeft = 'auto';
     figure.style.marginRight = 'auto';
   }
@@ -101,13 +252,25 @@ function applyImageFigureStyle(figure: HTMLElement) {
     img.style.display = 'block';
     img.style.borderRadius = '12px';
     img.style.background = '#f8f9fc';
-    img.style.maxHeight = small ? '160px' : '560px';
-    img.style.maxWidth = small ? '180px' : '100%';
-    img.style.width = small ? 'auto' : '100%';
+    img.style.maxHeight = '560px';
+    img.style.maxWidth = '100%';
+    img.style.width = '100%';
     img.style.height = 'auto';
     img.style.objectFit = 'contain';
-    img.style.border = '1px solid #e8ebf2';
+    img.style.border = selected ? '2px solid #f251a8' : '1px solid #e8ebf2';
+    if (figure.dataset.dragging === 'true') {
+      img.style.cursor = 'grabbing';
+    } else if (resizing && resizeMode) {
+      img.style.cursor = getResizeCursor(resizeMode);
+    } else if (resizeMode) {
+      img.style.cursor = getResizeCursor(resizeMode);
+    } else {
+      img.style.cursor = 'grab';
+    }
+    img.setAttribute('draggable', 'false');
   }
+
+  Array.from(figure.querySelectorAll('[data-resize-handle]')).forEach((node) => node.remove());
 
   const figcaption = figure.querySelector('figcaption');
   if (figcaption) {
@@ -157,13 +320,14 @@ function markdownToEditorHtml(markdown: string) {
     const imageMatch = block.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (imageMatch) {
       const src = imageMatch[2].trim();
-      if (!isSafeUrl(src)) {
+      if (!isSafeImageUrl(src)) {
         return '<p><br></p>';
       }
 
       const parsedAlt = parseImageAlt(imageMatch[1] ?? '');
       const label = parsedAlt.label || '이미지';
-      return `<figure data-kind="image" data-align="${parsedAlt.layout}" data-small="${parsedAlt.small ? 'true' : 'false'}"><img src="${escapeHtml(src)}" alt="${escapeHtml(label)}" /><figcaption>${escapeHtml(label)}</figcaption></figure>`;
+      const width = parsedAlt.width ?? IMAGE_WIDTH_BY_LEVEL[parsedAlt.size];
+      return `<figure data-kind="image" data-align="${parsedAlt.layout}" data-size="${parsedAlt.size}" data-width="${width}" data-offset="${parsedAlt.offset}" data-wrap="${parsedAlt.wrap ? 'true' : 'false'}"><img src="${escapeHtml(src)}" alt="${escapeHtml(label)}" /><figcaption>${escapeHtml(label)}</figcaption></figure>`;
     }
 
     const attachmentMatch = block.match(/^\[📎\s+([^\]]+)\]\(([^)]+)\)$/);
@@ -244,18 +408,31 @@ function serializeBlock(element: HTMLElement) {
   if (tag === 'figure' && element.dataset.kind === 'image') {
     const image = element.querySelector('img');
     const src = image?.getAttribute('src')?.trim();
-    if (!src || !isSafeUrl(src)) return '';
+    if (!src || !isSafeImageUrl(src)) return '';
 
     const caption = element.querySelector('figcaption')?.textContent?.trim() ?? '';
     const align = (element.dataset.align as ImageLayout | undefined) ?? 'center';
-    const small = element.dataset.small === 'true';
+    const sizeValue = Number(element.dataset.size ?? `${DEFAULT_IMAGE_SIZE_LEVEL}`);
+    const size = normalizeImageSize(sizeValue);
+    const rawWidth = Number(element.dataset.width ?? '');
+    const widthPx = Number.isFinite(rawWidth) && rawWidth > 0
+      ? clampImageWidth(rawWidth)
+      : IMAGE_WIDTH_BY_LEVEL[size];
+    const offset = clampImageOffset(Number(element.dataset.offset ?? '0') || 0);
+    const wrap = element.dataset.wrap === 'true';
     const options: string[] = [];
 
     if (align !== 'center') {
       options.push(align);
     }
-    if (small) {
-      options.push('small');
+    if (widthPx !== IMAGE_WIDTH_BY_LEVEL[DEFAULT_IMAGE_SIZE_LEVEL]) {
+      options.push(`w${widthPx}`);
+    }
+    if (wrap) {
+      options.push('wrap');
+    }
+    if (offset !== 0) {
+      options.push(`x${offset}`);
     }
 
     const altText = [caption || 'image', ...options].join('|');
@@ -297,6 +474,18 @@ function ensureTrailingParagraph(root: HTMLElement) {
   root.append(paragraph);
 }
 
+function ensureParagraphAfterFigure(figure: HTMLElement) {
+  const next = figure.nextElementSibling;
+  if (next && next.tagName.toLowerCase() === 'p') {
+    return next as HTMLElement;
+  }
+
+  const paragraph = document.createElement('p');
+  paragraph.append(document.createElement('br'));
+  figure.parentNode?.insertBefore(paragraph, figure.nextSibling);
+  return paragraph;
+}
+
 export function NotionLikeEditor({
   value,
   onChange,
@@ -308,6 +497,9 @@ export function NotionLikeEditor({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const selectionRef = useRef<Range | null>(null);
+  const activeImageFigureRef = useRef<HTMLElement | null>(null);
+  const dragStateRef = useRef<{ figure: HTMLElement; startX: number; startOffset: number; moved: boolean } | null>(null);
+  const resizeStateRef = useRef<{ figure: HTMLElement; mode: ImageResizeMode; startX: number; startY: number; startWidth: number; moved: boolean } | null>(null);
   const markdownRef = useRef('');
   const [uploadingKind, setUploadingKind] = useState<'image' | 'file' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -322,11 +514,19 @@ export function NotionLikeEditor({
 
     root.innerHTML = renderedHtml;
     root.querySelectorAll('figure[data-kind="image"]').forEach((figure) => {
+      (figure as HTMLElement).dataset.selected = 'false';
       applyImageFigureStyle(figure as HTMLElement);
     });
+    activeImageFigureRef.current = null;
     ensureTrailingParagraph(root);
     markdownRef.current = value;
   }, [renderedHtml, value]);
+
+  useEffect(() => {
+    return () => {
+      document.body.style.userSelect = '';
+    };
+  }, []);
 
   const emitChange = useCallback(() => {
     const root = editorRef.current;
@@ -389,20 +589,142 @@ export function NotionLikeEditor({
     saveSelection();
   }, [saveSelection]);
 
+  const placeCaretAtParagraphStart = useCallback((paragraph: HTMLElement) => {
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    let targetNode: Node = paragraph;
+    let offset = 0;
+
+    if (paragraph.firstChild && paragraph.firstChild.nodeName !== 'BR') {
+      targetNode = paragraph.firstChild;
+      offset = 0;
+    }
+
+    const range = document.createRange();
+    range.setStart(targetNode, offset);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    saveSelection();
+  }, [saveSelection]);
+
   const findActiveImageFigure = useCallback(() => {
     const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return null;
-
-    let target: Node | null = selection.getRangeAt(0).commonAncestorContainer;
-    while (target && target !== editorRef.current) {
-      if (target instanceof HTMLElement && target.tagName.toLowerCase() === 'figure' && target.dataset.kind === 'image') {
-        return target;
+    if (selection && selection.rangeCount > 0) {
+      let target: Node | null = selection.getRangeAt(0).commonAncestorContainer;
+      while (target && target !== editorRef.current) {
+        if (target instanceof HTMLElement && target.tagName.toLowerCase() === 'figure' && target.dataset.kind === 'image') {
+          activeImageFigureRef.current = target;
+          return target;
+        }
+        target = target.parentNode;
       }
-      target = target.parentNode;
+    }
+
+    const fallbackFigure = activeImageFigureRef.current;
+    if (fallbackFigure && editorRef.current?.contains(fallbackFigure)) {
+      return fallbackFigure;
     }
 
     return null;
   }, []);
+
+  const setActiveImageFigure = useCallback((figure: HTMLElement | null) => {
+    const previous = activeImageFigureRef.current;
+    if (previous && previous !== figure && editorRef.current?.contains(previous)) {
+      previous.dataset.selected = 'false';
+      previous.dataset.resizeMode = '';
+      applyImageFigureStyle(previous);
+    }
+
+    if (figure && editorRef.current?.contains(figure)) {
+      activeImageFigureRef.current = figure;
+      figure.dataset.selected = 'true';
+      applyImageFigureStyle(figure);
+      return;
+    }
+
+    activeImageFigureRef.current = null;
+  }, []);
+
+  const getCurrentImageFigure = useCallback(() => {
+    const active = activeImageFigureRef.current;
+    if (active && editorRef.current?.contains(active)) {
+      return active;
+    }
+    return findActiveImageFigure();
+  }, [findActiveImageFigure]);
+
+  const stopImagePointerAction = useCallback((shouldEmit = true) => {
+    const dragState = dragStateRef.current;
+    const resizeState = resizeStateRef.current;
+    let moved = false;
+
+    if (dragState) {
+      dragState.figure.dataset.dragging = 'false';
+      dragState.figure.dataset.resizeMode = '';
+      applyImageFigureStyle(dragState.figure);
+      moved = moved || dragState.moved;
+      dragStateRef.current = null;
+    }
+
+    if (resizeState) {
+      resizeState.figure.dataset.resizing = 'false';
+      resizeState.figure.dataset.resizeMode = '';
+      applyImageFigureStyle(resizeState.figure);
+      moved = moved || resizeState.moved;
+      resizeStateRef.current = null;
+    }
+
+    document.body.style.userSelect = '';
+
+    if (shouldEmit && moved) {
+      emitChange();
+    }
+  }, [emitChange]);
+
+  useEffect(() => {
+    const handleWindowMouseMove = (event: MouseEvent) => {
+      const resizeState = resizeStateRef.current;
+      if (resizeState) {
+        const deltaX = event.clientX - resizeState.startX;
+        const deltaY = event.clientY - resizeState.startY;
+        const resizeDelta = getResizeDelta(resizeState.mode, deltaX, deltaY);
+        const nextWidth = clampImageWidth(resizeState.startWidth + resizeDelta);
+
+        if (nextWidth !== Number(resizeState.figure.dataset.width ?? '0')) {
+          resizeState.figure.dataset.width = `${Math.round(nextWidth)}`;
+          resizeState.moved = true;
+          applyImageFigureStyle(resizeState.figure);
+        }
+        return;
+      }
+
+      const dragState = dragStateRef.current;
+      if (!dragState) return;
+
+      const deltaX = event.clientX - dragState.startX;
+      const nextOffset = clampImageOffset(dragState.startOffset + deltaX);
+      if (nextOffset !== (Number(dragState.figure.dataset.offset ?? '0') || 0)) {
+        dragState.figure.dataset.offset = `${nextOffset}`;
+        dragState.moved = true;
+        applyImageFigureStyle(dragState.figure);
+      }
+    };
+
+    const handleWindowMouseUp = () => {
+      stopImagePointerAction(true);
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, [stopImagePointerAction]);
 
   const insertNodeAtCursor = useCallback((node: Node, insertTrailingParagraph = false) => {
     const root = editorRef.current;
@@ -512,7 +834,7 @@ export function NotionLikeEditor({
   }, [emitChange, placeCaretAfter, restoreSelection]);
 
   const toggleImageLayout = useCallback(() => {
-    const figure = findActiveImageFigure();
+    const figure = getCurrentImageFigure();
     if (!figure) {
       setError('정렬을 바꿀 이미지를 먼저 선택해 주세요.');
       return;
@@ -523,7 +845,36 @@ export function NotionLikeEditor({
     figure.dataset.align = next;
     applyImageFigureStyle(figure);
     emitChange();
-  }, [emitChange, findActiveImageFigure]);
+  }, [emitChange, getCurrentImageFigure]);
+
+  const toggleImageWrap = useCallback(() => {
+    const figure = getCurrentImageFigure();
+    if (!figure) {
+      setError('옆글 배치할 이미지를 먼저 선택해 주세요.');
+      return;
+    }
+
+    const current = figure.dataset.wrap === 'true';
+    figure.dataset.wrap = current ? 'false' : 'true';
+
+    if (!current) {
+      const align = (figure.dataset.align as ImageLayout | undefined) ?? 'center';
+      if (align === 'center') {
+        figure.dataset.align = 'left';
+      }
+
+      const currentWidth = clampImageWidth(Number(figure.dataset.width ?? `${IMAGE_WIDTH_BY_LEVEL[DEFAULT_IMAGE_SIZE_LEVEL]}`));
+      if (currentWidth > IMAGE_WRAP_DEFAULT_WIDTH) {
+        figure.dataset.width = `${IMAGE_WRAP_DEFAULT_WIDTH}`;
+      }
+
+      const paragraph = ensureParagraphAfterFigure(figure);
+      placeCaretAtParagraphStart(paragraph);
+    }
+
+    applyImageFigureStyle(figure);
+    emitChange();
+  }, [emitChange, getCurrentImageFigure, placeCaretAtParagraphStart]);
 
   const insertAsset = useCallback(async (file: File, kind: 'image' | 'file') => {
     setError(null);
@@ -566,14 +917,17 @@ export function NotionLikeEditor({
 
       if (kind === 'image') {
         const src = payload.markdown_url || (payload.attachment?.id ? `/api/upload/${payload.attachment.id}/file` : '');
-        if (!src || !isSafeUrl(src)) {
+        if (!src || !isSafeImageUrl(src)) {
           throw new Error('이미지 URL을 생성하지 못했습니다.');
         }
 
         const figure = document.createElement('figure');
         figure.dataset.kind = 'image';
         figure.dataset.align = 'center';
-        figure.dataset.small = 'false';
+        figure.dataset.size = `${DEFAULT_IMAGE_SIZE_LEVEL}`;
+        figure.dataset.width = `${IMAGE_WIDTH_BY_LEVEL[DEFAULT_IMAGE_SIZE_LEVEL]}`;
+        figure.dataset.offset = '0';
+        figure.dataset.wrap = 'false';
 
         const image = document.createElement('img');
         image.src = src;
@@ -584,8 +938,10 @@ export function NotionLikeEditor({
         caption.textContent = getImageAlt(file.name);
 
         figure.append(image, caption);
+        figure.dataset.selected = 'false';
         applyImageFigureStyle(figure);
         insertNodeAtCursor(figure, true);
+        setActiveImageFigure(figure);
       } else {
         const attachmentId = payload.attachment?.id;
         if (!attachmentId) {
@@ -608,7 +964,7 @@ export function NotionLikeEditor({
       if (imageInputRef.current) imageInputRef.current.value = '';
       if (attachmentInputRef.current) attachmentInputRef.current.value = '';
     }
-  }, [documentId, insertNodeAtCursor]);
+  }, [documentId, insertNodeAtCursor, setActiveImageFigure]);
 
   const handleImageChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -625,6 +981,88 @@ export function NotionLikeEditor({
   const handleInput = useCallback(() => {
     emitChange();
   }, [emitChange]);
+
+  const handleEditorMouseDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    const figure = target.closest('figure[data-kind="image"]') as HTMLElement | null;
+    if (!figure) {
+      setActiveImageFigure(null);
+      return;
+    }
+
+    setActiveImageFigure(figure);
+
+    const image = figure.querySelector('img');
+    if (!(image instanceof HTMLImageElement) || disabled) return;
+
+    const resizeMode = getResizeModeFromPointer(image.getBoundingClientRect(), event.clientX, event.clientY);
+    event.preventDefault();
+
+    if (resizeMode) {
+      const currentWidth = clampImageWidth(
+        Number(figure.dataset.width ?? '0') || Math.round(image.getBoundingClientRect().width)
+      );
+      figure.dataset.width = `${currentWidth}`;
+      figure.dataset.resizeMode = resizeMode;
+      figure.dataset.resizing = 'true';
+      resizeStateRef.current = {
+        figure,
+        mode: resizeMode,
+        startX: event.clientX,
+        startY: event.clientY,
+        startWidth: currentWidth,
+        moved: false,
+      };
+      applyImageFigureStyle(figure);
+      document.body.style.userSelect = 'none';
+      return;
+    }
+
+    figure.dataset.resizeMode = '';
+    const currentOffset = clampImageOffset(Number(figure.dataset.offset ?? '0') || 0);
+    dragStateRef.current = {
+      figure,
+      startX: event.clientX,
+      startOffset: currentOffset,
+      moved: false,
+    };
+
+    figure.dataset.dragging = 'true';
+    applyImageFigureStyle(figure);
+    document.body.style.userSelect = 'none';
+  }, [disabled, setActiveImageFigure]);
+
+  const handleEditorMouseMove = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    if (dragStateRef.current || resizeStateRef.current) return;
+
+    const target = event.target as HTMLElement;
+    const figure = target.closest('figure[data-kind="image"]') as HTMLElement | null;
+
+    if (!figure) {
+      const active = activeImageFigureRef.current;
+      if (active && active.dataset.resizeMode) {
+        active.dataset.resizeMode = '';
+        applyImageFigureStyle(active);
+      }
+      return;
+    }
+
+    const image = figure.querySelector('img');
+    if (!(image instanceof HTMLImageElement)) return;
+
+    const nextMode = getResizeModeFromPointer(image.getBoundingClientRect(), event.clientX, event.clientY);
+    const currentMode = figure.dataset.resizeMode ?? '';
+    const nextModeValue = nextMode ?? '';
+
+    if (currentMode !== nextModeValue) {
+      figure.dataset.resizeMode = nextModeValue;
+      applyImageFigureStyle(figure);
+    }
+  }, []);
+
+  const handleEditorMouseUp = useCallback(() => {
+    stopImagePointerAction(true);
+  }, [stopImagePointerAction]);
 
   const handleToolbarMouseDown = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -655,6 +1093,15 @@ export function NotionLikeEditor({
         >
           <Columns2 className="h-4 w-4" />
           좌우
+        </button>
+        <button
+          type="button"
+          onMouseDown={handleToolbarMouseDown}
+          onClick={toggleImageWrap}
+          disabled={disabled}
+          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
+        >
+          옆글 배치
         </button>
         <button
           type="button"
@@ -695,8 +1142,13 @@ export function NotionLikeEditor({
         contentEditable={!disabled}
         suppressContentEditableWarning
         onInput={handleInput}
+        onMouseDown={handleEditorMouseDown}
+        onMouseMove={handleEditorMouseMove}
+        onMouseUp={() => {
+          handleEditorMouseUp();
+          saveSelection();
+        }}
         onKeyUp={saveSelection}
-        onMouseUp={saveSelection}
         onFocus={saveSelection}
         data-placeholder={placeholder}
         className="notion-like-editor min-h-[360px] rounded-xl border border-border bg-surface px-5 py-4 text-base leading-relaxed text-text-primary focus:outline-none focus:border-curi-pink/50"

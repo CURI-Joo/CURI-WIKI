@@ -42,17 +42,23 @@ export function getProfileName(
   return profile?.name ?? userId;
 }
 
-export function useDocumentAuthor(document: Pick<Document, 'id' | 'owner_id'> | undefined) {
+type DocumentAuthor = Pick<Profile, 'id' | 'name'>;
+
+export function useDocumentAuthor(document: (Pick<Document, 'id' | 'owner_id'> & {
+  public_author?: DocumentAuthor | null;
+}) | undefined) {
   const { session, profile, loading } = useAuth();
   const isDemo = isDemoMode();
   const documentId = document?.id;
   const ownerId = document?.owner_id;
+  const publicAuthor = document?.public_author;
   const approved = Boolean(session && profile?.status === 'approved');
   const key = `${documentId ?? ''}:${ownerId ?? ''}:${session?.user.id ?? 'anon'}:${approved}:${profile?.role ?? ''}`;
-  const [result, setResult] = useState<{ key: string; author: Pick<Profile, 'id' | 'name'> | null } | null>(null);
+  const [result, setResult] = useState<{ key: string; author: DocumentAuthor | null } | null>(null);
 
   useEffect(() => {
     if (isDemo || loading || !documentId || !ownerId) return;
+    if (!approved && publicAuthor?.id === ownerId) return;
     let cancelled = false;
 
     async function loadAuthor() {
@@ -68,8 +74,9 @@ export function useDocumentAuthor(document: Pick<Document, 'id' | 'owner_id'> | 
       if (!cancelled) setResult({ key, author: null });
     });
     return () => { cancelled = true; };
-  }, [isDemo, loading, approved, documentId, ownerId, key]);
+  }, [isDemo, loading, approved, documentId, ownerId, key, publicAuthor]);
 
   if (isDemo) return demoProfiles.find((author) => author.id === ownerId) ?? null;
+  if (!loading && !approved && publicAuthor && publicAuthor.id === ownerId) return publicAuthor;
   return !loading && result?.key === key ? result.author : null;
 }

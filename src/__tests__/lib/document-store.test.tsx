@@ -42,15 +42,15 @@ describe('document store uses session RLS results', () => {
     mocks.auth.profile = null;
     mocks.auth.loading = false;
     mocks.query.mockReset().mockResolvedValue({ data: [], error: null });
-    vi.stubGlobal('fetch', vi.fn());
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json({ documents: [] })));
   });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-  it('accepts an empty RLS result without calling the public API', async () => {
+  it('accepts an empty public API result when anonymous RLS returns no rows', async () => {
     const { result } = renderHook(() => useDocumentStore());
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.documents).toEqual([]);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith('/api/wiki/public-documents', { cache: 'no-store' });
   });
 
   it('loads public documents and refreshes through the same RLS query', async () => {
@@ -61,6 +61,32 @@ describe('document store uses session RLS results', () => {
     await act(() => result.current.refresh());
     expect(result.current.documents).toEqual([]);
     expect(mocks.query).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles pre-migration anonymous RLS with a public-only API fallback', async () => {
+    const published = document('published');
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({
+      documents: [published, document('draft', 'Draft'), document('secret', 'Published', 'cat-secret')],
+    }));
+    const { result } = renderHook(() => useDocumentStore());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.documents).toEqual([published]);
+  });
+
+  it('does not fall back when the new RLS policy returns public documents', async () => {
+    mocks.query.mockResolvedValue({ data: [document('published')], error: null });
+    const { result } = renderHook(() => useDocumentStore());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('never replaces an approved user RLS result with the public-only API', async () => {
+    mocks.auth.session = { user: { id: 'member' } };
+    mocks.auth.profile = { status: 'approved', role: 'member' };
+    const { result } = renderHook(() => useDocumentStore());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.documents).toEqual([]);
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -109,7 +135,7 @@ describe('document store uses session RLS results', () => {
     await waitFor(() => expect(result.current.documents).toEqual([draft]));
   });
 
-  it.each(['error', 'rejection'])('clears stale data on a query %s without a service-role fallback', async (failure) => {
+  it.each(['error', 'rejection'])('clears stale data on a query %s when the public fallback is empty', async (failure) => {
     mocks.query.mockResolvedValueOnce({ data: [document('published')], error: null });
     const { result } = renderHook(() => useDocumentStore());
     await waitFor(() => expect(result.current.documents).toHaveLength(1));
@@ -118,7 +144,7 @@ describe('document store uses session RLS results', () => {
     await act(() => result.current.refresh());
     expect(result.current.documents).toEqual([]);
     expect(result.current.loading).toBe(false);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it('waits for initial authentication before querying', async () => {

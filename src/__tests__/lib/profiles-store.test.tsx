@@ -37,6 +37,14 @@ describe('document author display', () => {
     expect(mocks.from).not.toHaveBeenCalled();
   });
 
+  it('uses the public API author while the SQL migration is pending', () => {
+    const author = { id: 'owner', name: 'Public author' };
+    const { result } = renderHook(() => useDocumentAuthor({ id: 'public', owner_id: 'owner', public_author: author }));
+    expect(result.current).toEqual(author);
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
   it('keeps approved users on the existing profile RLS path for private documents', async () => {
     mocks.auth.session = { user: { id: 'admin' } };
     mocks.auth.profile = { status: 'approved', role: 'admin' };

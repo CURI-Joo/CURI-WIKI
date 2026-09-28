@@ -16,7 +16,7 @@ export async function GET() {
 
   const { data, error } = await supabaseAdmin
     .from('documents')
-    .select('*')
+    .select('*, public_author:profiles!documents_owner_id_fkey(id, name)')
     .eq('status', 'Published')
     .neq('category_id', 'cat-secret')
     .order('updated_at', { ascending: false });

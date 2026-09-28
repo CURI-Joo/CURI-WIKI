@@ -1,15 +1,15 @@
 # Published 문서 공개 조회 수정
 
-정상 동작에는 애플리케이션 배포와 Supabase SQL 적용이 모두 필요합니다.
+애플리케이션은 SQL 적용 전에도 필터를 적용한 공개 API로 Published 문서를 표시합니다. Supabase 직접 조회에도 공개 권한을 적용하려면 아래 SQL을 실행해야 합니다.
 
 ## 변경 파일
 
 | 파일 | 이유 |
 | --- | --- |
 | `supabase/migrations/20260928000000_public_document_read.sql` | 공개 SELECT 정책과 작성자 ID·이름 조회 함수 추가. 기존 승인 사용자 정책 유지 |
-| `src/app/api/wiki/public-documents/route.ts` | Published·비밀 카테고리 제외 조건과 응답 캐시 금지 추가 |
-| `src/lib/document-store.ts` | service role API 대비 조회 제거. RLS 결과 사용, 로그인 상태별 재조회와 이전 요청 결과 무효화 |
-| `src/lib/profiles-store.ts` | 비로그인 작성자는 제한된 함수로 조회. 승인 사용자는 기존 profiles RLS 사용 |
+| `src/app/api/wiki/public-documents/route.ts` | Published·비밀 카테고리 제외 조건, 작성자 ID·이름만 결합, 응답 캐시 금지 추가 |
+| `src/lib/document-store.ts` | RLS 조회 우선. 승인되지 않은 공개 독자만 빈 결과·오류 시 필터된 공개 API로 대비 조회. 인증 변경 시 재조회와 이전 요청 무효화 |
+| `src/lib/profiles-store.ts` | 공개 API에 포함된 이름 또는 제한된 SQL 함수로 작성자 조회. 승인 사용자는 기존 profiles RLS 사용 |
 | `src/app/(dashboard)/documents/[slug]/page.tsx` | 공개 문서 작성자 이름 표시 |
 | `src/app/(dashboard)/search/page.tsx` | 현재 조회할 수 없는 문서의 이전 검색 결과 숨김 |
 | `src/components/layout/command-palette.tsx` | 로그아웃 후 이전 검색 결과와 키보드 선택 숨김 |
@@ -22,6 +22,8 @@
 | `docs/public-document-access.md` | 적용 SQL과 확인 절차 |
 
 상세 화면은 tags/document_tags를 조회하지 않고 카테고리는 정적 데이터를 사용하므로 해당 테이블의 RLS는 변경하지 않습니다. profiles 전체 행을 공개하면 이메일까지 노출되므로, 공개 문서의 작성자 ID·이름만 반환하는 함수를 사용합니다. 기존 파일의 migration은 수정하지 않습니다.
+
+SQL 적용이 별도로 필요하므로 배포 호환성을 위해 공개 API 대비 조회를 유지합니다. 빈 배열도 처리하며, 승인 사용자의 조회에는 이 경로를 사용하지 않아 Draft 조회 범위를 줄이지 않습니다. SQL 적용 후 공개 행이 정상 조회되면 대비 API는 호출하지 않습니다.
 
 ## Supabase 적용
 

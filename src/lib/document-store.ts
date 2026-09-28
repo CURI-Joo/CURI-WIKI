@@ -406,6 +406,7 @@ export async function deleteStoredDocument(
 export function useDocumentStore() {
   const isDemo = isDemoMode();
   const { session, profile, loading: authLoading } = useAuth();
+  const approved = Boolean(session && profile?.status === 'approved');
   const accessKey = isDemo ? 'demo' : `${session?.user.id ?? 'anon'}:${profile?.status ?? ''}:${profile?.role ?? ''}`;
   const requestId = useRef(0);
   const [state, setState] = useState<DocumentStoreState>(() => ({
@@ -430,17 +431,32 @@ export function useDocumentStore() {
         .select('*')
         .order('updated_at', { ascending: false });
 
-      // An empty result is valid. RLS decides which documents this session can
-      // read; never substitute a service-role response for that decision.
+      // RLS remains authoritative for approved users, including their drafts.
       if (!error) documents = normalizeDocuments((data ?? []) as Document[]);
     } catch {
       // A failed request must not leave documents from an earlier session visible.
     }
 
+    // During migration rollout, anon RLS may return [] without an error. Only
+    // public readers fall back to the API, which explicitly filters public rows.
+    if (!approved && documents.length === 0) {
+      try {
+        const response = await fetch('/api/wiki/public-documents', { cache: 'no-store' });
+        if (response.ok) {
+          const payload = await response.json() as { documents?: Document[] };
+          documents = normalizeDocuments((payload.documents ?? []).filter(
+            (document) => document.status === 'Published' && document.category_id !== 'cat-secret'
+          ));
+        }
+      } catch {
+        // A failed public fallback must leave the list empty.
+      }
+    }
+
     if (currentRequest === requestId.current) {
       setState({ documents, loading: false, accessKey });
     }
-  }, [isDemo, authLoading, accessKey]);
+  }, [isDemo, authLoading, accessKey, approved]);
 
   useEffect(() => {
     if (!isDemo) {

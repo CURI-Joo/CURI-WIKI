@@ -16,6 +16,9 @@ export default function SearchPage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
+  // Search results can outlive the session that produced them.
+  const visibleIds = new Set(documents.map((document) => document.id));
+  const visibleResults = results.filter((result) => visibleIds.has(result.id));
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto space-y-6 py-4">
@@ -76,7 +79,7 @@ export default function SearchPage() {
         </button>
       </div>
 
-      {searched && results.length === 0 && (
+      {searched && visibleResults.length === 0 && (
         <div className="text-center py-16">
           <Search className="w-10 h-10 text-text-muted mx-auto mb-3" />
           <p className="text-text-secondary text-sm">
@@ -85,10 +88,10 @@ export default function SearchPage() {
         </div>
       )}
 
-      {results.length > 0 && (
+      {visibleResults.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs text-text-muted">{results.length}개의 결과</p>
-          {results.map((r) => (
+          <p className="text-xs text-text-muted">{visibleResults.length}개의 결과</p>
+          {visibleResults.map((r) => (
             <Link
               key={r.id}
               href={`/documents/${r.slug}`}

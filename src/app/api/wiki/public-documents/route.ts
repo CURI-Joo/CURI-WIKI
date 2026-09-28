@@ -17,12 +17,15 @@ export async function GET() {
   const { data, error } = await supabaseAdmin
     .from('documents')
     .select('*')
+    .eq('status', 'Published')
+    .neq('category_id', 'cat-secret')
     .order('updated_at', { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ documents: data ?? [] });
+  return NextResponse.json({ documents: data ?? [] }, {
+    headers: { 'Cache-Control': 'no-store' },
+  });
 }
-

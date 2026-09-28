@@ -100,11 +100,12 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   // Group results by type
   const hasQuery = query.trim().length > 0;
-  const documentResults = hasQuery ? results.filter((r) => r.type === 'document') : [];
+  const documentResults = hasQuery && profile ? results.filter((r) => r.type === 'document') : [];
 
   // Flat list of all selectable items for keyboard nav
   const allItems = useMemo(
     (): { type: 'recent' | 'result'; value: string; result?: SearchResult }[] => {
+      if (!profile) return [];
       if (!hasQuery) {
         return recentSearches.map((search) => ({ type: 'recent', value: search }));
       }
@@ -115,7 +116,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         result,
       }));
     },
-    [hasQuery, recentSearches, results]
+    [hasQuery, recentSearches, results, profile]
   );
 
   const navigateToResult = useCallback(

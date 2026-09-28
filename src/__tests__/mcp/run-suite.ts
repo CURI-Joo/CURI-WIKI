@@ -319,8 +319,21 @@ export async function runMcpSuite() {
   const createdBody = toolJson(created.body);
   check("document created", createdBody.status === "created");
   check("author is the connected user", wiki.docs[0].author_id === USER);
-  check("url built from category and slug",
-    createdBody.url === `${BASE}/company/행사-부스-운영-가이드`, createdBody.url);
+  check("url uses the document detail route",
+    createdBody.url === `${BASE}/documents/행사-부스-운영-가이드`, createdBody.url);
+
+  const updated = await mcpCall(deps, {
+    jsonrpc: "2.0", id: 60, method: "tools/call",
+    params: { name: "update_document", arguments: { id_or_slug: createdBody.document.slug, category_slug: "product" } },
+  }, token);
+  check("updated document keeps the detail URL after changing categories",
+    toolJson(updated.body).status === "updated" && toolJson(updated.body).url === createdBody.url);
+
+  const fetched = await mcpCall(deps, {
+    jsonrpc: "2.0", id: 61, method: "tools/call",
+    params: { name: "get_document", arguments: { id_or_slug: createdBody.document.slug } },
+  }, token);
+  check("get_document returns the same detail URL", toolJson(fetched.body).url === createdBody.url);
 
   const dupe = await mcpCall(
     deps,

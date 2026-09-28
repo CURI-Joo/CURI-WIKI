@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { seedCategories } from '@/data/seed-categories';
 import { deleteStoredDocument, useDocumentStore } from '@/lib/document-store';
-import { useProfiles, getProfileName } from '@/lib/profiles-store';
+import { useDocumentAuthor } from '@/lib/profiles-store';
 import { formatDate } from '@/lib/utils';
 import { MarkdownRenderer } from '@/components/documents/markdown-renderer';
 import Link from 'next/link';
@@ -25,7 +25,8 @@ export default function DocumentDetailPage() {
   const router = useRouter();
   const { profile } = useAuth();
   const { documents, loading } = useDocumentStore();
-  const profiles = useProfiles();
+  const doc = documents.find((d) => d.slug === decodeURIComponent(slug));
+  const author = useDocumentAuthor(doc);
   const [linkCopied, setLinkCopied] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -45,8 +46,6 @@ export default function DocumentDetailPage() {
       </div>
     );
   }
-
-  const doc = documents.find((d) => d.slug === decodeURIComponent(slug));
 
   if (!doc) {
     return (
@@ -146,7 +145,7 @@ export default function DocumentDetailPage() {
           <div className="flex flex-wrap items-center gap-4 mt-4 text-xs text-text-muted">
             <span className="flex items-center gap-1">
               <User className="w-3 h-3" />
-              {getProfileName(profiles, doc.owner_id)}
+              {author?.name ?? '작성자'}
             </span>
             <span className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />

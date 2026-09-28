@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { AccessLevel, DocStatus, Document, DocumentAccess } from '@/types';
 import { demoDocumentAccess, demoDocuments } from '@/data/demo-data';
 import { isDemoMode } from '@/lib/demo-mode';
 import { createClient } from '@/lib/supabase/client';
 import { normalizeCategoryId, resolveCategoryIdForDatabase } from '@/lib/category-migration';
 import { slugify } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
 
 const DOCUMENTS_KEY = 'curi-wiki-documents-v2';
 const ACCESS_KEY = 'curi-wiki-document-access-v2';
@@ -15,6 +16,7 @@ const STORE_EVENT = 'curi-wiki-document-store-change';
 interface DocumentStoreState {
   documents: Document[];
   loading: boolean;
+  accessKey: string;
 }
 
 interface CreateDocumentInput {
@@ -403,67 +405,53 @@ export async function deleteStoredDocument(
 
 export function useDocumentStore() {
   const isDemo = isDemoMode();
+  const { session, profile, loading: authLoading } = useAuth();
+  const accessKey = isDemo ? 'demo' : `${session?.user.id ?? 'anon'}:${profile?.status ?? ''}:${profile?.role ?? ''}`;
+  const requestId = useRef(0);
   const [state, setState] = useState<DocumentStoreState>(() => ({
     documents: isDemo ? getMergedDocuments() : [],
     loading: !isDemo,
+    accessKey,
   }));
 
   const refresh = useCallback(async () => {
+    const currentRequest = ++requestId.current;
     if (isDemo) {
-      setState({ documents: getMergedDocuments(), loading: false });
+      emitStoreChange();
       return;
     }
 
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('documents')
-      .select('*')
-      .order('updated_at', { ascending: false });
+    if (authLoading) return;
 
-    if (error || !data) {
-      const response = await fetch('/api/wiki/public-documents', { cache: 'no-store' });
-      const payload = await response.json().catch(() => null) as { documents?: Document[] } | null;
-      setState({ documents: normalizeDocuments(payload?.documents ?? []), loading: false });
-      return;
+    let documents: Document[] = [];
+    try {
+      const { data, error } = await createClient()
+        .from('documents')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      // An empty result is valid. RLS decides which documents this session can
+      // read; never substitute a service-role response for that decision.
+      if (!error) documents = normalizeDocuments((data ?? []) as Document[]);
+    } catch {
+      // A failed request must not leave documents from an earlier session visible.
     }
 
-    setState({ documents: normalizeDocuments((data ?? []) as Document[]), loading: false });
-  }, [isDemo]);
+    if (currentRequest === requestId.current) {
+      setState({ documents, loading: false, accessKey });
+    }
+  }, [isDemo, authLoading, accessKey]);
 
   useEffect(() => {
     if (!isDemo) {
-      let cancelled = false;
-
-      async function loadDocuments() {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from('documents')
-          .select('*')
-          .order('updated_at', { ascending: false });
-
-        if (error || !data) {
-          const response = await fetch('/api/wiki/public-documents', { cache: 'no-store' });
-          const payload = await response.json().catch(() => null) as { documents?: Document[] } | null;
-
-          if (!cancelled) {
-            setState({ documents: normalizeDocuments(payload?.documents ?? []), loading: false });
-          }
-          return;
-        }
-
-        if (!cancelled) {
-          setState({ documents: normalizeDocuments((data ?? []) as Document[]), loading: false });
-        }
-      }
-
-      void loadDocuments();
+      void refresh();
 
       return () => {
-        cancelled = true;
+        requestId.current += 1;
       };
     }
 
-    const sync = () => setState({ documents: getMergedDocuments(), loading: false });
+    const sync = () => setState({ documents: getMergedDocuments(), loading: false, accessKey });
     const handleStorage = (event: StorageEvent) => {
       if (event.key === DOCUMENTS_KEY || event.key === ACCESS_KEY) sync();
     };
@@ -475,7 +463,12 @@ export function useDocumentStore() {
       window.removeEventListener(STORE_EVENT, sync);
       window.removeEventListener('storage', handleStorage);
     };
-  }, [isDemo]);
+  }, [isDemo, refresh, accessKey]);
 
-  return { ...state, refresh };
+  // Hide the previous session's data synchronously, before the effect refetches.
+  if (authLoading || state.accessKey !== accessKey) {
+    return { documents: [] as Document[], loading: true, refresh };
+  }
+
+  return { documents: state.documents, loading: state.loading, refresh };
 }

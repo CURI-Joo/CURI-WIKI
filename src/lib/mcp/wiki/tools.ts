@@ -31,8 +31,8 @@ export function slugify(input: string): string {
     .slice(0, 80);
 }
 
-function documentUrl(baseUrl: string, doc: { category_slug: string; slug: string }): string {
-  return `${baseUrl.replace(/\/+$/, "")}/${doc.category_slug}/${doc.slug}`;
+function documentUrl(baseUrl: string, doc: { slug: string }): string {
+  return `${baseUrl.replace(/\/+$/, "")}/documents/${doc.slug}`;
 }
 
 async function requireApproved(ctx: ToolContext) {

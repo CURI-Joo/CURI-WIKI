@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { Bold, Italic, List, ListOrdered, Quote, Minus, Columns2, ImagePlus, Link2, Loader2, Paperclip } from 'lucide-react';
+import { Bold, Italic, List, ListOrdered, Quote, Minus, Columns2, ImagePlus, Link2, Loader2, Paperclip, Trash2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   ACCEPT_ATTRIBUTE,
   ALLOWED_IMAGE_TYPES,
@@ -21,6 +22,7 @@ import {
 import { HighlightColorPicker } from '@/components/documents/highlight-color-picker';
 import { getHighlightColor, type HighlightColor } from '@/lib/highlight-colors';
 import { prepareEditorHighlights } from '@/lib/editor-highlights';
+import { imageAtDeletePosition } from '@/lib/editor-image-deletion';
 import { editorHtmlToMarkdown } from '@/lib/editor-markdown';
 import { constrainImageOffset, getImageLayoutStyles, IMAGE_WRAP_GAP } from '@/lib/image-layout';
 
@@ -223,6 +225,7 @@ export function NotionLikeEditor({
   const markdownRef = useRef<string | null>(null);
   const [uploadingKind, setUploadingKind] = useState<'image' | 'file' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [imageMenu, setImageMenu] = useState<{ figure: HTMLElement; x: number; y: number } | null>(null);
 
   const renderedHtml = useMemo(() => markdownToEditorHtml(value), [value]);
 
@@ -249,6 +252,17 @@ export function NotionLikeEditor({
       document.body.style.userSelect = '';
     };
   }, []);
+
+  useEffect(() => {
+    if (!imageMenu) return;
+    const close = () => setImageMenu(null);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [imageMenu]);
 
   useEffect(() => {
     editorRef.current?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((input) => {
@@ -411,6 +425,28 @@ export function NotionLikeEditor({
       emitChange();
     }
   }, [emitChange]);
+
+  const selectImageFigure = useCallback((figure: HTMLElement) => {
+    editorRef.current?.focus({ preventScroll: true });
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNode(figure);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    saveSelection();
+  }, [saveSelection]);
+
+  const deleteImageFigure = useCallback((figure: HTMLElement) => {
+    if (disabled || !editorRef.current?.contains(figure)) return;
+    stopImagePointerAction(false);
+    setActiveImageFigure(null);
+    setImageMenu(null);
+    selectImageFigure(figure);
+    // Keep image + caption deletion in the browser's native Undo history.
+    if (!document.execCommand('delete')) window.getSelection()?.getRangeAt(0).deleteContents();
+    emitChange();
+    saveSelection();
+  }, [disabled, emitChange, saveSelection, selectImageFigure, setActiveImageFigure, stopImagePointerAction]);
 
   useEffect(() => {
     const handleWindowMouseMove = (event: MouseEvent) => {
@@ -760,6 +796,18 @@ export function NotionLikeEditor({
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (disabled || event.nativeEvent.isComposing) return;
+    if (event.key === 'Backspace' || event.key === 'Delete') {
+      const root = editorRef.current;
+      const selection = window.getSelection();
+      const figure = root && selection?.rangeCount
+        ? imageAtDeletePosition(root, selection.getRangeAt(0), event.key === 'Backspace') : null;
+      if (figure && selection) {
+        event.preventDefault();
+        deleteImageFigure(figure);
+        return;
+      }
+    }
+    if (/^(Arrow|Home$|End$)/.test(event.key)) setActiveImageFigure(null);
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       saveSelection();
@@ -786,9 +834,10 @@ export function NotionLikeEditor({
       event.preventDefault();
       placeCaretAtParagraphStart(next as HTMLElement);
     }
-  }, [disabled, emitChange, insertLink, placeCaretAtParagraphStart, saveSelection]);
+  }, [deleteImageFigure, disabled, emitChange, insertLink, placeCaretAtParagraphStart, saveSelection, setActiveImageFigure]);
 
   const handleEditorMouseDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    if (disabled || event.button !== 0) return;
     const target = event.target as HTMLElement;
     const figure = target.closest('figure[data-kind="image"]') as HTMLElement | null;
     if (!figure || target.closest('figcaption')) {
@@ -803,6 +852,8 @@ export function NotionLikeEditor({
 
     const resizeMode = getResizeModeFromPointer(image.getBoundingClientRect(), event.clientX, event.clientY);
     event.preventDefault();
+    // Drag handling prevents the browser's default focus/selection, so set both explicitly.
+    selectImageFigure(figure);
 
     if (resizeMode) {
       const currentWidth = Math.min(Math.round(image.getBoundingClientRect().width), getImageMaxWidth(figure));
@@ -835,7 +886,7 @@ export function NotionLikeEditor({
     figure.dataset.dragging = 'true';
     applyImageFigureStyle(figure);
     document.body.style.userSelect = 'none';
-  }, [disabled, setActiveImageFigure]);
+  }, [disabled, selectImageFigure, setActiveImageFigure]);
 
   const handleEditorMouseMove = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     if (dragStateRef.current || resizeStateRef.current) return;
@@ -979,6 +1030,15 @@ export function NotionLikeEditor({
           if ((event.target as HTMLElement).closest('a')) event.preventDefault();
         }}
         onMouseDown={handleEditorMouseDown}
+        onContextMenu={(event) => {
+          const figure = (event.target as HTMLElement).closest('figure[data-kind="image"]') as HTMLElement | null;
+          if (!figure || disabled || (event.target as HTMLElement).closest('figcaption')) return;
+          event.preventDefault();
+          stopImagePointerAction(false);
+          selectImageFigure(figure);
+          setActiveImageFigure(figure);
+          setImageMenu({ figure, x: event.clientX, y: event.clientY });
+        }}
         onMouseMove={handleEditorMouseMove}
         onMouseUp={() => {
           handleEditorMouseUp();
@@ -989,6 +1049,30 @@ export function NotionLikeEditor({
         data-placeholder={placeholder}
         className="notion-like-editor prose-curi min-h-[360px] rounded-xl border border-border bg-surface p-6 md:p-8 focus:outline-none focus:border-curi-pink/50"
       />
+
+      <DropdownMenu open={imageMenu !== null} onOpenChange={(open) => { if (!open) setImageMenu(null); }} modal={false}>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button" tabIndex={-1} aria-hidden="true"
+            className="pointer-events-none fixed h-px w-px opacity-0"
+            style={{ left: imageMenu?.x ?? 0, top: imageMenu?.y ?? 0 }}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          aria-label="이미지 메뉴" align="start" collisionPadding={8}
+          onCloseAutoFocus={(event) => event.preventDefault()}
+          onEscapeKeyDown={() => {
+            if (imageMenu && editorRef.current?.contains(imageMenu.figure)) selectImageFigure(imageMenu.figure);
+          }}
+        >
+          <DropdownMenuItem
+            disabled={disabled} className="gap-2 text-error focus:text-error"
+            onSelect={() => { if (imageMenu) deleteImageFigure(imageMenu.figure); }}
+          >
+            <Trash2 className="h-4 w-4" /> 이미지 삭제
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {error && <p className="text-xs text-error">{error}</p>}
 

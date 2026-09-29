@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { NotionLikeEditor } from '@/components/documents/notion-like-editor';
+import { imageAtDeletePosition } from '@/lib/editor-image-deletion';
 
 const markdown = '# 제목\n\n> 인용\n\n| 이름 | 역할 |\n| --- | --- |\n| Claude | 글쓰기 |\n\n---\n\n- [ ] 검토';
 
@@ -59,5 +60,27 @@ describe('NotionLikeEditor', () => {
     expect(figure.dataset.width).toBe('800');
     expect(Number(figure.dataset.offset)).toBe(0);
     expect(onChange).toHaveBeenLastCalledWith('![사진|w800](/image.png)');
+  });
+
+  it('focuses the editor and selects the whole image when clicking its body', () => {
+    render(<NotionLikeEditor value={'![사진 설명](/image.png)'} onChange={vi.fn()} />);
+    const editor = screen.getByRole('textbox');
+    const image = editor.querySelector('img')!;
+    vi.spyOn(image, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, width: 300, height: 200, right: 300, bottom: 200, toJSON: () => ({}),
+    });
+    fireEvent.mouseDown(image, { clientX: 150, clientY: 100 });
+    fireEvent.mouseUp(window);
+    expect(document.activeElement).toBe(editor);
+    expect(imageAtDeletePosition(editor, window.getSelection()!.getRangeAt(0), true)).toBe(editor.querySelector('figure'));
+  });
+
+  it('offers image deletion on right-click while keeping the caption editable', () => {
+    render(<NotionLikeEditor value={'![사진 설명](/image.png)'} onChange={vi.fn()} />);
+    const editor = screen.getByRole('textbox');
+    fireEvent.contextMenu(editor.querySelector('figcaption')!, { clientX: 100, clientY: 100 });
+    expect(screen.queryByRole('menuitem', { name: '이미지 삭제' })).toBeNull();
+    fireEvent.contextMenu(editor.querySelector('img')!, { clientX: 100, clientY: 100 });
+    expect(screen.getByRole('menuitem', { name: '이미지 삭제' })).toBeVisible();
   });
 });

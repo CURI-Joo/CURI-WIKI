@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { Columns2, Highlighter, ImagePlus, Link2, Loader2, Paperclip } from 'lucide-react';
+import { Bold, Italic, List, ListOrdered, Quote, Minus, Columns2, ImagePlus, Link2, Loader2, Paperclip } from 'lucide-react';
 import {
   ACCEPT_ATTRIBUTE,
   ALLOWED_IMAGE_TYPES,
@@ -12,47 +12,22 @@ import {
   maxSizeFor,
 } from '@/lib/upload-constraints';
 import { formatFileSize } from '@/lib/utils';
+import {
+  renderDocumentMarkdown as markdownToEditorHtml,
+  isSafeUrl, isSafeImageUrl, clampImageOffset, clampImageWidth, normalizeImageSize,
+  IMAGE_WIDTH_BY_LEVEL, DEFAULT_IMAGE_SIZE_LEVEL,
+  type ImageLayout,
+} from '@/lib/document-markdown';
+import { HighlightColorPicker } from '@/components/documents/highlight-color-picker';
+import { getHighlightColor, type HighlightColor } from '@/lib/highlight-colors';
+import { prepareEditorHighlights } from '@/lib/editor-highlights';
+import { editorHtmlToMarkdown } from '@/lib/editor-markdown';
+import { constrainImageOffset, getImageLayoutStyles, IMAGE_WRAP_GAP } from '@/lib/image-layout';
 
-type ImageLayout = 'left' | 'center' | 'right';
-type ImageSizeLevel = 1 | 2 | 3 | 4;
 type ImageResizeMode = 'e' | 'w' | 'n' | 's' | 'ne' | 'nw' | 'se' | 'sw';
 
-const IMAGE_WIDTH_BY_LEVEL: Record<ImageSizeLevel, number> = {
-  1: 180,
-  2: 320,
-  3: 520,
-  4: 900,
-};
-
-const DEFAULT_IMAGE_SIZE_LEVEL: ImageSizeLevel = 4;
-const IMAGE_OFFSET_LIMIT = 280;
-const IMAGE_MIN_WIDTH = 120;
-const IMAGE_MAX_WIDTH = 1100;
 const IMAGE_RESIZE_EDGE_THRESHOLD = 24;
 const IMAGE_WRAP_DEFAULT_WIDTH = 360;
-
-function clampImageOffset(value: number) {
-  return Math.max(-IMAGE_OFFSET_LIMIT, Math.min(IMAGE_OFFSET_LIMIT, value));
-}
-
-function clampImageWidth(value: number) {
-  return Math.max(IMAGE_MIN_WIDTH, Math.min(IMAGE_MAX_WIDTH, value));
-}
-
-function normalizeImageSize(value: number): ImageSizeLevel {
-  if (value >= 1 && value <= 4) {
-    return value as ImageSizeLevel;
-  }
-  return DEFAULT_IMAGE_SIZE_LEVEL;
-}
-
-function parseImageWidthOption(options: string[]) {
-  const widthOption = options.find((option) => /^w\d+$/i.test(option));
-  if (!widthOption) return null;
-  const parsed = Number(widthOption.slice(1));
-  if (!Number.isFinite(parsed)) return null;
-  return clampImageWidth(parsed);
-}
 
 function getResizeModeFromPointer(rect: DOMRect, clientX: number, clientY: number): ImageResizeMode | null {
   const nearLeft = Math.abs(clientX - rect.left) <= IMAGE_RESIZE_EDGE_THRESHOLD;
@@ -110,27 +85,6 @@ type NotionLikeEditorProps = {
   placeholder?: string;
 };
 
-function escapeHtml(input: string) {
-  return input
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function escapeMarkdown(input: string) {
-  return input.replace(/([\\`*_[\]{}()#+\-.!>])/g, '\\$1');
-}
-
-function isSafeUrl(src: string) {
-  return /^https?:\/\//i.test(src) || src.startsWith('/');
-}
-
-function isSafeImageUrl(src: string) {
-  return isSafeUrl(src) || src.startsWith('data:image/');
-}
-
 function getImageAlt(fileName: string) {
   return fileName.replace(/\.[^.]+$/, '').trim() || 'image';
 }
@@ -145,55 +99,25 @@ function getAttachmentLabel(fileName: string, fileSize: number) {
   return `${safeName} · ${formatFileSize(fileSize)}`;
 }
 
-function parseImageSizeOption(options: string[]): ImageSizeLevel {
-  const sizeOption = options.find((option) => option.startsWith('size'));
-  if (sizeOption) {
-    const parsed = Number(sizeOption.replace(/[^0-9]/g, ''));
-    if (parsed >= 1 && parsed <= 4) {
-      return parsed as ImageSizeLevel;
-    }
-  }
-
-  if (options.some((option) => option === 'small' || option === 'tiny' || option === '작게')) {
-    return 1;
-  }
-
-  return DEFAULT_IMAGE_SIZE_LEVEL;
+function getImageContainerWidth(figure: HTMLElement) {
+  const parent = figure.parentElement;
+  if (!parent) return 0;
+  const style = window.getComputedStyle(parent);
+  return Math.max(0, parent.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
 }
 
-function parseImageOffsetOption(options: string[]) {
-  const offsetOption = options.find((option) => /^x-?\d+$/i.test(option));
-  if (!offsetOption) return 0;
-  const parsed = Number(offsetOption.slice(1));
-  if (!Number.isFinite(parsed)) return 0;
-  return clampImageOffset(parsed);
+function getImageMaxWidth(figure: HTMLElement) {
+  const gap = figure.dataset.wrap === 'true' && figure.dataset.align !== 'center' ? IMAGE_WRAP_GAP : 0;
+  return Math.max(1, Math.floor(getImageContainerWidth(figure) - gap));
 }
 
-function parseImageAlt(alt: string) {
-  const raw = alt.trim();
-  const [labelPart, ...optionParts] = raw.split('|');
-  const options = optionParts.map((option) => option.trim().toLowerCase());
-
-  let layout: ImageLayout = 'center';
-  if (options.includes('left') || options.includes('좌')) {
-    layout = 'left';
-  } else if (options.includes('right') || options.includes('우')) {
-    layout = 'right';
-  }
-
-  const size = parseImageSizeOption(options);
-  const width = parseImageWidthOption(options);
-  const offset = parseImageOffsetOption(options);
-  const wrap = options.some((option) => option === 'wrap' || option === 'flow' || option === '옆글');
-
-  return {
-    label: labelPart.trim(),
-    layout,
-    size,
-    width,
-    offset,
-    wrap,
-  };
+function getConstrainedImageOffset(figure: HTMLElement, offset: number, width = figure.getBoundingClientRect().width) {
+  if (figure.dataset.wrap === 'true') return 0;
+  // Metadata uses whole pixels; round toward the center to stay within fractional layout bounds.
+  return Math.trunc(constrainImageOffset(
+    clampImageOffset(offset), getImageContainerWidth(figure), width,
+    (figure.dataset.align as ImageLayout | undefined) ?? 'center',
+  ));
 }
 
 function applyImageFigureStyle(figure: HTMLElement) {
@@ -213,12 +137,11 @@ function applyImageFigureStyle(figure: HTMLElement) {
 
   figure.style.display = 'block';
   figure.style.position = 'relative';
-  figure.style.width = `min(100%, ${widthPx}px)`;
+  Object.assign(figure.style, getImageLayoutStyles({ layout: align, width: widthPx, offset, wrap }));
   figure.style.maxWidth = '100%';
-  figure.style.marginTop = '12px';
-  figure.style.marginBottom = '12px';
-  figure.style.transform = wrap ? '' : (offset === 0 ? '' : `translateX(${offset}px)`);
-  figure.style.transition = figure.dataset.dragging === 'true' || resizing ? 'none' : 'transform 120ms ease';
+  figure.style.marginTop = '16px';
+  figure.style.marginBottom = '16px';
+  figure.style.transition = 'none';
   if (figure.dataset.dragging === 'true') {
     figure.style.cursor = 'grabbing';
   } else if ((resizing || resizeMode) && resizeMode) {
@@ -227,37 +150,18 @@ function applyImageFigureStyle(figure: HTMLElement) {
     figure.style.cursor = 'grab';
   }
 
-  if (wrap && align !== 'center') {
-    figure.style.float = align;
-    figure.style.marginLeft = align === 'left' ? '0' : '12px';
-    figure.style.marginRight = align === 'right' ? '0' : '12px';
-  } else {
-    figure.style.float = 'none';
-    figure.style.clear = 'none';
-  }
-
-  if (!wrap && align === 'left') {
-    figure.style.marginLeft = '0';
-    figure.style.marginRight = 'auto';
-  } else if (!wrap && align === 'right') {
-    figure.style.marginLeft = 'auto';
-    figure.style.marginRight = '0';
-  } else if (!wrap) {
-    figure.style.marginLeft = 'auto';
-    figure.style.marginRight = 'auto';
-  }
-
   const img = figure.querySelector('img');
   if (img) {
     img.style.display = 'block';
-    img.style.borderRadius = '12px';
-    img.style.background = '#f8f9fc';
+    img.style.borderRadius = '8px';
+    img.style.background = 'var(--background)';
     img.style.maxHeight = '560px';
     img.style.maxWidth = '100%';
     img.style.width = '100%';
     img.style.height = 'auto';
     img.style.objectFit = 'contain';
-    img.style.border = selected ? '2px solid #f251a8' : '1px solid #e8ebf2';
+    img.style.border = '1px solid var(--border)';
+    img.style.outline = selected ? '2px solid var(--curi-pink)' : '';
     if (figure.dataset.dragging === 'true') {
       img.style.cursor = 'grabbing';
     } else if (resizing && resizeMode) {
@@ -276,193 +180,9 @@ function applyImageFigureStyle(figure: HTMLElement) {
   if (figcaption) {
     (figcaption as HTMLElement).style.marginTop = '6px';
     (figcaption as HTMLElement).style.fontSize = '12px';
-    (figcaption as HTMLElement).style.color = '#8f94a6';
+    (figcaption as HTMLElement).style.color = 'var(--text-muted)';
     (figcaption as HTMLElement).style.textAlign = 'center';
   }
-}
-
-function markdownInlineToHtml(input: string) {
-  let html = escapeHtml(input);
-
-  html = html.replace(/`([^`]+)`/g, (_m, code: string) => `<code>${code}</code>`);
-  html = html.replace(/\*\*([^*]+)\*\*/g, (_m, bold: string) => `<strong>${bold}</strong>`);
-  html = html.replace(/==([^=]+)==/g, (_m, marked: string) => `<mark>${marked}</mark>`);
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label: string, href: string) => {
-    const safeHref = href.trim();
-    const safeLabel = label.trim() || safeHref;
-
-    if (!isSafeUrl(safeHref)) {
-      return escapeHtml(safeLabel);
-    }
-
-    if (safeLabel.startsWith('📎')) {
-      return `<a data-attachment="true" href="${escapeHtml(safeHref)}">${escapeHtml(safeLabel)}</a>`;
-    }
-
-    return `<a href="${escapeHtml(safeHref)}">${escapeHtml(safeLabel)}</a>`;
-  });
-
-  return html;
-}
-
-function markdownToEditorHtml(markdown: string) {
-  const normalized = markdown.replace(/\r\n/g, '\n');
-  const blocks = normalized.split(/\n{2,}/);
-
-  if (!normalized.trim()) {
-    return '<p><br></p>';
-  }
-
-  const htmlBlocks = blocks.map((rawBlock) => {
-    const block = rawBlock.trim();
-    if (!block) return '<p><br></p>';
-
-    const imageMatch = block.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-    if (imageMatch) {
-      const src = imageMatch[2].trim();
-      if (!isSafeImageUrl(src)) {
-        return '<p><br></p>';
-      }
-
-      const parsedAlt = parseImageAlt(imageMatch[1] ?? '');
-      const label = parsedAlt.label || '이미지';
-      const width = parsedAlt.width ?? IMAGE_WIDTH_BY_LEVEL[parsedAlt.size];
-      return `<figure data-kind="image" data-align="${parsedAlt.layout}" data-size="${parsedAlt.size}" data-width="${width}" data-offset="${parsedAlt.offset}" data-wrap="${parsedAlt.wrap ? 'true' : 'false'}"><img src="${escapeHtml(src)}" alt="${escapeHtml(label)}" /><figcaption>${escapeHtml(label)}</figcaption></figure>`;
-    }
-
-    const attachmentMatch = block.match(/^\[📎\s+([^\]]+)\]\(([^)]+)\)$/);
-    if (attachmentMatch) {
-      const href = attachmentMatch[2].trim();
-      if (!isSafeUrl(href)) {
-        return '<p><br></p>';
-      }
-      const label = attachmentMatch[1].trim() || '첨부파일';
-      return `<p><a data-attachment="true" href="${escapeHtml(href)}">📎 ${escapeHtml(label)}</a></p>`;
-    }
-
-    const headingMatch = block.match(/^(#{1,3})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const tag = `h${Math.min(level, 3)}`;
-      return `<${tag}>${markdownInlineToHtml(headingMatch[2].trim())}</${tag}>`;
-    }
-
-    const lines = block.split('\n').map((line) => markdownInlineToHtml(line));
-    return `<p>${lines.join('<br>')}</p>`;
-  });
-
-  return htmlBlocks.join('');
-}
-
-function serializeInline(node: Node): string {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return escapeMarkdown(node.textContent ?? '');
-  }
-
-  if (node.nodeType !== Node.ELEMENT_NODE) {
-    return '';
-  }
-
-  const element = node as HTMLElement;
-  const tag = element.tagName.toLowerCase();
-
-  if (tag === 'br') return '\n';
-
-  if (tag === 'mark') {
-    return `==${serializeChildren(element)}==`;
-  }
-
-  if (tag === 'strong' || tag === 'b') {
-    return `**${serializeChildren(element)}**`;
-  }
-
-  if (tag === 'code') {
-    return `\`${serializeChildren(element)}\``;
-  }
-
-  if (tag === 'a') {
-    const href = element.getAttribute('href')?.trim() ?? '';
-    const label = serializeChildren(element).trim() || href;
-    if (!href || !isSafeUrl(href)) return label;
-
-    if (element.dataset.attachment === 'true' || label.startsWith('📎')) {
-      const normalized = label.replace(/^📎\s*/, '').trim() || '첨부파일';
-      return `[📎 ${normalized}](${href})`;
-    }
-
-    return `[${label}](${href})`;
-  }
-
-  return serializeChildren(element);
-}
-
-function serializeChildren(element: HTMLElement) {
-  return Array.from(element.childNodes)
-    .map((child) => serializeInline(child))
-    .join('');
-}
-
-function serializeBlock(element: HTMLElement) {
-  const tag = element.tagName.toLowerCase();
-
-  if (tag === 'figure' && element.dataset.kind === 'image') {
-    const image = element.querySelector('img');
-    const src = image?.getAttribute('src')?.trim();
-    if (!src || !isSafeImageUrl(src)) return '';
-
-    const caption = element.querySelector('figcaption')?.textContent?.trim() ?? '';
-    const align = (element.dataset.align as ImageLayout | undefined) ?? 'center';
-    const sizeValue = Number(element.dataset.size ?? `${DEFAULT_IMAGE_SIZE_LEVEL}`);
-    const size = normalizeImageSize(sizeValue);
-    const rawWidth = Number(element.dataset.width ?? '');
-    const widthPx = Number.isFinite(rawWidth) && rawWidth > 0
-      ? clampImageWidth(rawWidth)
-      : IMAGE_WIDTH_BY_LEVEL[size];
-    const offset = clampImageOffset(Number(element.dataset.offset ?? '0') || 0);
-    const wrap = element.dataset.wrap === 'true';
-    const options: string[] = [];
-
-    if (align !== 'center') {
-      options.push(align);
-    }
-    if (widthPx !== IMAGE_WIDTH_BY_LEVEL[DEFAULT_IMAGE_SIZE_LEVEL]) {
-      options.push(`w${widthPx}`);
-    }
-    if (wrap) {
-      options.push('wrap');
-    }
-    if (offset !== 0) {
-      options.push(`x${offset}`);
-    }
-
-    const altText = [caption || 'image', ...options].join('|');
-    return `![${altText}](${src})`;
-  }
-
-  if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
-    const level = Number(tag.replace('h', ''));
-    const hashes = '#'.repeat(level);
-    return `${hashes} ${serializeChildren(element).trim()}`;
-  }
-
-  const text = Array.from(element.childNodes)
-    .map((child) => serializeInline(child))
-    .join('')
-    .trim();
-
-  return text;
-}
-
-function editorHtmlToMarkdown(root: HTMLElement) {
-  const blocks = Array.from(root.children)
-    .map((child) => serializeBlock(child as HTMLElement))
-    .filter((block) => block.length > 0);
-
-  if (blocks.length === 0) {
-    return '';
-  }
-
-  return blocks.join('\n\n');
 }
 
 function ensureTrailingParagraph(root: HTMLElement) {
@@ -500,7 +220,7 @@ export function NotionLikeEditor({
   const activeImageFigureRef = useRef<HTMLElement | null>(null);
   const dragStateRef = useRef<{ figure: HTMLElement; startX: number; startOffset: number; moved: boolean } | null>(null);
   const resizeStateRef = useRef<{ figure: HTMLElement; mode: ImageResizeMode; startX: number; startY: number; startWidth: number; moved: boolean } | null>(null);
-  const markdownRef = useRef('');
+  const markdownRef = useRef<string | null>(null);
   const [uploadingKind, setUploadingKind] = useState<'image' | 'file' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -510,16 +230,18 @@ export function NotionLikeEditor({
     const root = editorRef.current;
     if (!root) return;
 
-    if (markdownRef.current === value) return;
-
-    root.innerHTML = renderedHtml;
+    const contentChanged = markdownRef.current !== value;
+    if (contentChanged) {
+      root.innerHTML = renderedHtml;
+      prepareEditorHighlights(root);
+      activeImageFigureRef.current = null;
+      ensureTrailingParagraph(root);
+      markdownRef.current = value;
+    }
     root.querySelectorAll('figure[data-kind="image"]').forEach((figure) => {
-      (figure as HTMLElement).dataset.selected = 'false';
+      if (contentChanged) (figure as HTMLElement).dataset.selected = 'false';
       applyImageFigureStyle(figure as HTMLElement);
     });
-    activeImageFigureRef.current = null;
-    ensureTrailingParagraph(root);
-    markdownRef.current = value;
   }, [renderedHtml, value]);
 
   useEffect(() => {
@@ -527,6 +249,12 @@ export function NotionLikeEditor({
       document.body.style.userSelect = '';
     };
   }, []);
+
+  useEffect(() => {
+    editorRef.current?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((input) => {
+      input.disabled = !!disabled;
+    });
+  }, [disabled, renderedHtml]);
 
   const emitChange = useCallback(() => {
     const root = editorRef.current;
@@ -691,10 +419,16 @@ export function NotionLikeEditor({
         const deltaX = event.clientX - resizeState.startX;
         const deltaY = event.clientY - resizeState.startY;
         const resizeDelta = getResizeDelta(resizeState.mode, deltaX, deltaY);
-        const nextWidth = clampImageWidth(resizeState.startWidth + resizeDelta);
+        const nextWidth = Math.min(
+          Math.round(clampImageWidth(resizeState.startWidth + resizeDelta)),
+          getImageMaxWidth(resizeState.figure),
+        );
 
         if (nextWidth !== Number(resizeState.figure.dataset.width ?? '0')) {
-          resizeState.figure.dataset.width = `${Math.round(nextWidth)}`;
+          resizeState.figure.dataset.width = `${nextWidth}`;
+          resizeState.figure.dataset.offset = `${getConstrainedImageOffset(
+            resizeState.figure, Number(resizeState.figure.dataset.offset) || 0, nextWidth,
+          )}`;
           resizeState.moved = true;
           applyImageFigureStyle(resizeState.figure);
         }
@@ -705,7 +439,7 @@ export function NotionLikeEditor({
       if (!dragState) return;
 
       const deltaX = event.clientX - dragState.startX;
-      const nextOffset = clampImageOffset(dragState.startOffset + deltaX);
+      const nextOffset = getConstrainedImageOffset(dragState.figure, dragState.startOffset + deltaX);
       if (nextOffset !== (Number(dragState.figure.dataset.offset ?? '0') || 0)) {
         dragState.figure.dataset.offset = `${nextOffset}`;
         dragState.moved = true;
@@ -750,7 +484,28 @@ export function NotionLikeEditor({
 
     const range = selection.getRangeAt(0);
     range.deleteContents();
-    range.insertNode(node);
+    if (insertTrailingParagraph) {
+      let block: Node = range.startContainer;
+      while (block.parentNode && block.parentNode !== root) block = block.parentNode;
+      if (block instanceof HTMLElement && block.parentNode === root) {
+        // Split a text paragraph at the caret; insert media after other whole blocks.
+        if (/^(P|H[1-6])$/.test(block.tagName)) {
+          const tail = range.cloneRange();
+          tail.setEndAfter(block.lastChild ?? block);
+          const paragraph = document.createElement('p');
+          paragraph.append(tail.extractContents());
+          block.after(node, paragraph);
+          placeCaretAtParagraphStart(paragraph);
+          emitChange();
+          return;
+        }
+        block.after(node);
+      } else {
+        range.insertNode(node);
+      }
+    } else {
+      range.insertNode(node);
+    }
 
     if (insertTrailingParagraph) {
       const paragraph = document.createElement('p');
@@ -762,7 +517,17 @@ export function NotionLikeEditor({
     }
 
     emitChange();
-  }, [emitChange, placeCaretAfter, restoreSelection]);
+  }, [emitChange, placeCaretAfter, placeCaretAtParagraphStart, restoreSelection]);
+
+  const formatText = useCallback((command: string, value?: string) => {
+    if (disabled) return;
+    editorRef.current?.focus();
+    restoreSelection();
+    document.execCommand('styleWithCSS', false, 'false');
+    document.execCommand(command, false, value);
+    saveSelection();
+    emitChange();
+  }, [disabled, emitChange, restoreSelection, saveSelection]);
 
   const insertLink = useCallback(() => {
     const root = editorRef.current;
@@ -803,35 +568,25 @@ export function NotionLikeEditor({
     emitChange();
   }, [emitChange, placeCaretAfter, restoreSelection]);
 
-  const insertHighlight = useCallback(() => {
+  const insertHighlight = useCallback((color: HighlightColor) => {
     const root = editorRef.current;
-    if (!root) return;
-
+    if (!root || disabled) return;
+    const savedRange = selectionRef.current?.cloneRange();
     root.focus();
-    restoreSelection();
-
     const selection = window.getSelection();
+    if (savedRange && root.contains(savedRange.commonAncestorContainer) && selection) {
+      selection.removeAllRanges();
+      selection.addRange(savedRange);
+    }
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
       setError('형광펜을 적용할 텍스트를 먼저 선택해 주세요.');
       return;
     }
-
-    const range = selection.getRangeAt(0);
-    const mark = document.createElement('mark');
-
-    try {
-      range.surroundContents(mark);
-      placeCaretAfter(mark);
-      emitChange();
-    } catch {
-      const selectedText = selection.toString();
-      mark.textContent = selectedText;
-      range.deleteContents();
-      range.insertNode(mark);
-      placeCaretAfter(mark);
-      emitChange();
-    }
-  }, [emitChange, placeCaretAfter, restoreSelection]);
+    setError(null);
+    document.execCommand('hiliteColor', false, getHighlightColor(color).background);
+    saveSelection();
+    emitChange();
+  }, [disabled, emitChange, saveSelection]);
 
   const toggleImageLayout = useCallback(() => {
     const figure = getCurrentImageFigure();
@@ -982,10 +737,61 @@ export function NotionLikeEditor({
     emitChange();
   }, [emitChange]);
 
+  const handlePaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (disabled) return;
+    const file = Array.from(event.clipboardData.files).find((item) => ALLOWED_IMAGE_TYPES.includes(item.type));
+    if (file) {
+      saveSelection();
+      void insertAsset(file, 'image');
+      return;
+    }
+    const html = event.clipboardData.getData('text/html');
+    if (html) {
+      const pasted = new DOMParser().parseFromString(html, 'text/html');
+      const markdown = editorHtmlToMarkdown(pasted.body);
+      document.execCommand('insertHTML', false, markdownToEditorHtml(markdown));
+    } else {
+      document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
+    }
+    saveSelection();
+    emitChange();
+  }, [disabled, emitChange, insertAsset, saveSelection]);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (disabled || event.nativeEvent.isComposing) return;
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      saveSelection();
+      insertLink();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const selection = window.getSelection();
+    const node = selection?.anchorNode;
+    const cell = (node instanceof Element ? node : node?.parentElement)?.closest('td, th');
+    const table = cell?.closest('table');
+    if (!cell || !table) return;
+    const cells = Array.from(table.querySelectorAll('td, th'));
+    const index = cells.indexOf(cell);
+    let next = cells[index + (event.shiftKey ? -1 : 1)];
+    if (!next && !event.shiftKey) {
+      const row = table.insertRow();
+      const count = (cell.parentElement as HTMLTableRowElement).cells.length;
+      for (let i = 0; i < count; i++) row.insertCell().append(document.createElement('br'));
+      next = row.cells[0];
+      emitChange();
+    }
+    if (next) {
+      event.preventDefault();
+      placeCaretAtParagraphStart(next as HTMLElement);
+    }
+  }, [disabled, emitChange, insertLink, placeCaretAtParagraphStart, saveSelection]);
+
   const handleEditorMouseDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
     const figure = target.closest('figure[data-kind="image"]') as HTMLElement | null;
-    if (!figure) {
+    if (!figure || target.closest('figcaption')) {
       setActiveImageFigure(null);
       return;
     }
@@ -999,9 +805,7 @@ export function NotionLikeEditor({
     event.preventDefault();
 
     if (resizeMode) {
-      const currentWidth = clampImageWidth(
-        Number(figure.dataset.width ?? '0') || Math.round(image.getBoundingClientRect().width)
-      );
+      const currentWidth = Math.min(Math.round(image.getBoundingClientRect().width), getImageMaxWidth(figure));
       figure.dataset.width = `${currentWidth}`;
       figure.dataset.resizeMode = resizeMode;
       figure.dataset.resizing = 'true';
@@ -1019,7 +823,8 @@ export function NotionLikeEditor({
     }
 
     figure.dataset.resizeMode = '';
-    const currentOffset = clampImageOffset(Number(figure.dataset.offset ?? '0') || 0);
+    if (figure.dataset.wrap === 'true') return;
+    const currentOffset = getConstrainedImageOffset(figure, Number(figure.dataset.offset ?? '0') || 0);
     dragStateRef.current = {
       figure,
       startX: event.clientX,
@@ -1071,7 +876,37 @@ export function NotionLikeEditor({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2">
+      <div role="toolbar" aria-label="본문 서식" className="flex flex-wrap items-center gap-2 border-b border-border pb-2">
+        <select
+          aria-label="문단 스타일"
+          defaultValue=""
+          disabled={disabled}
+          onFocus={saveSelection}
+          onChange={(event) => {
+            formatText('formatBlock', event.target.value);
+            event.target.value = '';
+          }}
+          className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-text-secondary"
+        >
+          <option value="" disabled>문단 스타일</option>
+          <option value="p">본문</option>
+          <option value="h1">제목 1</option>
+          <option value="h2">제목 2</option>
+          <option value="h3">제목 3</option>
+        </select>
+        {[
+          { label: '굵게', icon: Bold, command: 'bold' },
+          { label: '기울임', icon: Italic, command: 'italic' },
+          { label: '글머리 목록', icon: List, command: 'insertUnorderedList' },
+          { label: '번호 목록', icon: ListOrdered, command: 'insertOrderedList' },
+          { label: '인용문', icon: Quote, command: 'formatBlock', value: 'blockquote' },
+          { label: '구분선', icon: Minus, command: 'insertHorizontalRule' },
+        ].map(({ label, icon: Icon, command, value }) => (
+          <button key={label} type="button" title={label} aria-label={label}
+            onMouseDown={handleToolbarMouseDown} onClick={() => formatText(command, value)} disabled={disabled}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border text-text-secondary hover:bg-surface-elevated disabled:opacity-50"
+          ><Icon className="h-4 w-4" /></button>
+        ))}
         <button
           type="button"
           onMouseDown={handleToolbarMouseDown}
@@ -1103,16 +938,7 @@ export function NotionLikeEditor({
         >
           옆글 배치
         </button>
-        <button
-          type="button"
-          onMouseDown={handleToolbarMouseDown}
-          onClick={insertHighlight}
-          disabled={disabled}
-          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
-        >
-          <Highlighter className="h-4 w-4" />
-          형광펜
-        </button>
+        <HighlightColorPicker onBeforeOpen={saveSelection} onSelect={insertHighlight} disabled={disabled} />
         <button
           type="button"
           onMouseDown={handleToolbarMouseDown}
@@ -1141,7 +967,17 @@ export function NotionLikeEditor({
         ref={editorRef}
         contentEditable={!disabled}
         suppressContentEditableWarning
+        role="textbox"
+        aria-label="문서 본문"
+        aria-multiline="true"
+        aria-disabled={!!disabled}
         onInput={handleInput}
+        onChange={handleInput}
+        onPaste={handlePaste}
+        onKeyDown={handleKeyDown}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest('a')) event.preventDefault();
+        }}
         onMouseDown={handleEditorMouseDown}
         onMouseMove={handleEditorMouseMove}
         onMouseUp={() => {
@@ -1151,50 +987,10 @@ export function NotionLikeEditor({
         onKeyUp={saveSelection}
         onFocus={saveSelection}
         data-placeholder={placeholder}
-        className="notion-like-editor min-h-[360px] rounded-xl border border-border bg-surface px-5 py-4 text-base leading-relaxed text-text-primary focus:outline-none focus:border-curi-pink/50"
+        className="notion-like-editor prose-curi min-h-[360px] rounded-xl border border-border bg-surface p-6 md:p-8 focus:outline-none focus:border-curi-pink/50"
       />
 
       {error && <p className="text-xs text-error">{error}</p>}
-
-      <style jsx>{`
-        .notion-like-editor:empty:before {
-          content: attr(data-placeholder);
-          color: #9aa0b2;
-          pointer-events: none;
-        }
-
-        .notion-like-editor :global(p) {
-          margin: 0;
-          min-height: 1.6em;
-        }
-
-        .notion-like-editor :global(h1),
-        .notion-like-editor :global(h2),
-        .notion-like-editor :global(h3) {
-          margin: 0.2em 0;
-          font-weight: 700;
-        }
-
-        .notion-like-editor :global(a) {
-          color: #4f5bcb;
-          text-decoration: underline;
-          text-underline-offset: 2px;
-        }
-
-        .notion-like-editor :global(mark) {
-          background: #fff4a8;
-          border-radius: 4px;
-          padding: 0 2px;
-        }
-
-        .notion-like-editor :global(code) {
-          background: #f2f4f8;
-          border-radius: 4px;
-          padding: 1px 4px;
-          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-          font-size: 0.9em;
-        }
-      `}</style>
 
       <input
         ref={imageInputRef}

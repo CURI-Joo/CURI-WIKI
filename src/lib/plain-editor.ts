@@ -11,6 +11,7 @@ export function markdownToPlainText(markdown: string): string {
     .replace(/\[📎\s+([^\]]+)\]\(([^)]+)\)/g, (_, label: string) => `📎 ${label}`)
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/==([^=\n]+)==(?:\{(?:yellow|green|blue|pink|purple)\})?/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/^#{1,6}\s+/gm, '')
     .replace(/^>\s?/gm, '')

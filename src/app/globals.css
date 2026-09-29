@@ -75,3 +75,44 @@ body {
   background: var(--curi-pink-soft);
   color: var(--foreground);
 }
+
+/* One document presentation for reading and direct editing. */
+.prose-curi { display: flow-root; color: var(--text-primary); font-size: 14px; line-height: 1.625; overflow-wrap: anywhere; }
+.prose-curi p { margin: 0 0 8px; min-height: 1.625em; }
+.prose-curi h1 { font-size: 24px; margin: 32px 0 16px; font-weight: 700; line-height: 1.35; }
+.prose-curi h2 { font-size: 18px; margin: 24px 0 12px; font-weight: 600; line-height: 1.5; }
+.prose-curi h3, .prose-curi h4, .prose-curi h5, .prose-curi h6 { font-size: 16px; margin: 16px 0 8px; font-weight: 600; }
+.prose-curi > :first-child { margin-top: 0; }
+.prose-curi strong, .prose-curi b { font-weight: 600; }
+.prose-curi blockquote { border-left: 2px solid var(--curi-pink); padding: 4px 0 4px 16px; margin: 12px 0; color: var(--text-secondary); font-style: italic; }
+.prose-curi blockquote > :last-child { margin-bottom: 0; }
+.prose-curi ul, .prose-curi ol { margin: 8px 0; padding-left: 24px; }
+.prose-curi ul { list-style: disc; }
+.prose-curi ol { list-style: decimal; }
+.prose-curi li { margin-bottom: 4px; }
+.prose-curi li > ul, .prose-curi li > ol { margin: 4px 0; }
+.prose-curi li:has(> input[type="checkbox"]), .prose-curi li:has(> p > input[type="checkbox"]) { list-style: none; }
+.prose-curi input[type="checkbox"] { accent-color: var(--curi-pink); margin-right: 6px; vertical-align: middle; }
+.prose-curi hr { border: 0; border-top: 1px solid var(--border); margin: 24px 0; clear: both; }
+.prose-curi code { padding: 2px 6px; border-radius: 4px; background: var(--surface-elevated); color: var(--curi-pink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.prose-curi pre { padding: 16px; margin: 16px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--background); overflow-x: auto; white-space: pre; }
+.prose-curi pre code { padding: 0; border: 0; background: transparent; color: var(--text-secondary); }
+.prose-curi mark { background: #fef08a; color: var(--text-primary); padding: 0 2px; border-radius: 4px; }
+.prose-curi a { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 2px 6px; color: var(--text-secondary); font-size: 13px; font-weight: 500; text-decoration: none; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.prose-curi a:hover { color: var(--curi-pink); background: var(--surface-elevated); }
+.prose-curi a[data-attachment="true"] { display: block; margin: 8px 0; padding: 8px 12px; border-radius: 8px; font-size: 14px; }
+.prose-curi [data-kind="table"] { overflow-x: auto; margin: 16px 0; clear: both; }
+.prose-curi table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.prose-curi th { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; font-weight: 500; text-align: left; }
+.prose-curi td { padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+.prose-curi [align="center"] { text-align: center; }
+.prose-curi [align="right"] { text-align: right; }
+.prose-curi [align="left"] { text-align: left; }
+.prose-curi figure[data-kind="image"] { display: block; max-width: 100%; margin-top: 16px; margin-bottom: 16px; }
+.prose-curi figure img { display: block; width: 100%; height: auto; max-height: 560px; object-fit: contain; border: 1px solid var(--border); border-radius: 8px; background: var(--background); }
+.prose-curi figcaption { margin-top: 6px; font-size: 12px; color: var(--text-muted); text-align: center; }
+.prose-curi figcaption:empty { display: none; }
+.notion-like-editor { position: relative; }
+.notion-like-editor:empty::before, .notion-like-editor:has(> p:only-child > br:only-child)::before { position: absolute; content: attr(data-placeholder); color: var(--text-muted); pointer-events: none; }
+.notion-like-editor[aria-disabled="true"] input { pointer-events: none; }
+.notion-like-editor td:focus, .notion-like-editor th:focus { outline: 1px solid var(--curi-pink); }

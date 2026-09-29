@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
-import { Columns2, Highlighter, ImagePlus, Link2, Loader2, Paperclip } from 'lucide-react';
+import { Columns2, ImagePlus, Link2, Loader2, Paperclip } from 'lucide-react';
 import {
   ACCEPT_ATTRIBUTE,
   ALLOWED_IMAGE_TYPES,
@@ -10,6 +10,8 @@ import {
   MAX_IMAGE_SIZE,
   maxSizeFor,
 } from '@/lib/upload-constraints';
+import { HighlightColorPicker } from '@/components/documents/highlight-color-picker';
+import { highlightedMarkdown, type HighlightColor } from '@/lib/highlight-colors';
 import { formatFileSize } from '@/lib/utils';
 
 function getImageAlt(fileName: string) {
@@ -301,7 +303,7 @@ export function MarkdownImageUploadButton({
     void insertAsset(file, 'file');
   };
 
-  const handleInsertHighlight = () => {
+  const handleInsertHighlight = (color: HighlightColor) => {
     setError(null);
 
     const textarea = textareaRef.current;
@@ -311,9 +313,7 @@ export function MarkdownImageUploadButton({
     const selectionEnd = textarea.selectionEnd ?? content.length;
     const hasSelection = selectionEnd > selectionStart;
 
-    const highlighted = hasSelection
-      ? `==${content.slice(selectionStart, selectionEnd)}==`
-      : '==형광펜 텍스트==';
+    const highlighted = highlightedMarkdown(hasSelection ? content.slice(selectionStart, selectionEnd) : '형광펜 텍스트', color);
 
     const nextCursor = selectionStart + highlighted.length;
     onContentChange((currentContent) => {
@@ -340,7 +340,7 @@ export function MarkdownImageUploadButton({
   };
 
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    <div className="flex min-w-0 flex-wrap items-center gap-2 [&>button]:shrink-0 [&>button]:whitespace-nowrap">
       <button
         type="button"
         onClick={() => imageInputRef.current?.click()}
@@ -367,17 +367,11 @@ export function MarkdownImageUploadButton({
         <Columns2 className="h-3.5 w-3.5" />
         좌우
       </button>
-      <button
-        type="button"
-        onClick={handleInsertHighlight}
+      <HighlightColorPicker
+        onSelect={handleInsertHighlight}
         disabled={disabled || uploadingKind !== null}
-        title="형광펜 강조"
-        aria-label="형광펜 강조"
         className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
-      >
-        <Highlighter className="h-3.5 w-3.5" />
-        형광펜
-      </button>
+      />
       <button
         type="button"
         onClick={handleInsertLink}

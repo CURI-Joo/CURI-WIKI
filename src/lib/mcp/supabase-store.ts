@@ -14,6 +14,12 @@ import type {
  */
 export interface SupabaseLike {
   from(table: string): any;
+  storage?: {
+    from(bucket: string): {
+      upload(path: string, body: Uint8Array, options: { contentType: string; upsert: boolean }): Promise<{ error: { message: string } | null }>;
+      remove(paths: string[]): Promise<unknown>;
+    };
+  };
   auth: {
     admin: {
       getUserById(id: string): Promise<{ data: { user: any } | null; error: any }>;
@@ -133,7 +139,7 @@ export function createSupabaseWikiStore(db: SupabaseLike, schema: WikiSchema = {
   };
 
   const UUID_RE =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    /^(?:doc-)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   const isUuid = (value: string): boolean => UUID_RE.test(value);
 
@@ -146,7 +152,7 @@ export function createSupabaseWikiStore(db: SupabaseLike, schema: WikiSchema = {
       // Approval lives in the app's own profile row, not in auth.users.
       const { data: profile } = await db
         .from(profiles)
-        .select("name, status")
+        .select("name, status, role")
         .eq("id", userId)
         .maybeSingle();
 
@@ -155,7 +161,30 @@ export function createSupabaseWikiStore(db: SupabaseLike, schema: WikiSchema = {
         email: user.email ?? null,
         display_name: profile?.name ?? null,
         approved: profile?.status === "approved",
+        role: profile?.role,
       };
+    },
+
+    async uploadImage(input, uploaderId) {
+      if (!db.storage) throw new Error('이미지 저장소가 설정되지 않았습니다.');
+      const storageKey = `${uploaderId}/${crypto.randomUUID()}.${input.file_name.split('.').pop()}`;
+      const bucket = db.storage.from('wiki-media');
+      const uploaded = await bucket.upload(storageKey, input.bytes, { contentType: input.mime_type, upsert: false });
+      if (uploaded.error) throw new Error(`이미지 업로드 실패: ${uploaded.error.message}`);
+      const result = await db.from('attachments').insert({
+        document_id: input.document_id,
+        issue_id: null,
+        storage_key: storageKey,
+        file_name: input.file_name,
+        mime_type: input.mime_type,
+        file_size: input.bytes.byteLength,
+        uploaded_by: uploaderId,
+      }).select('id').single();
+      if (result.error || !result.data) {
+        await bucket.remove([storageKey]);
+        throw new Error(`첨부파일 기록 실패: ${result.error?.message ?? '기록 없음'}`);
+      }
+      return { id: result.data.id, markdown_url: `/api/upload/${result.data.id}/file` };
     },
 
     async listCategories(): Promise<WikiCategory[]> {

@@ -90,6 +90,9 @@ export function memoryWikiStore(users: WikiUser[]): WikiStore & { docs: WikiDocu
     async getUser(id) {
       return users.find((user) => user.id === id) ?? null;
     },
+    async uploadImage(_input, _uploaderId) {
+      return { id: 'test-attachment', markdown_url: '/api/upload/test-attachment/file' };
+    },
     async listCategories() {
       return [
         { slug: 'company', name: '회사' },

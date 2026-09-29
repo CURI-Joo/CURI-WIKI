@@ -1,5 +1,6 @@
 import type { AuthContext } from "../oauth/flow";
 import { fetchSource } from "./source";
+import { readImageFile, requireUploadedImages } from "./images";
 import type { WikiStore } from "./types";
 
 export interface ToolContext {
@@ -134,9 +135,37 @@ export const tools: ToolDefinition[] = [
   },
 
   {
+    name: "upload_image",
+    description: "Save an actual image file to CURI Wiki and attach it to a document. Pass complete original file bytes as data_base64, or a downloadable file_url (the server downloads and stores the file, never hotlinks it). Use the returned markdown_url in the body. For a new article, first create a Draft without images, upload its images, then update and publish. Never invent or abbreviate image bytes; if unavailable, ask for the original file.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        document_id_or_slug: { type: "string", description: "Document receiving this attachment." },
+        file_name: { type: "string", description: "Original image filename." },
+        data_base64: { type: "string", description: "Complete base64 of the original file, without a data: prefix. Do not truncate or generate it." },
+        file_url: { type: "string", description: "Downloadable image file URL, used only to copy the real file into wiki storage. Do not pass a web page URL." },
+      },
+      required: ["document_id_or_slug", "file_name"],
+      additionalProperties: false,
+    },
+    requiredScope: "wiki.write",
+    handler: async (args, ctx) => {
+      const user = await requireApproved(ctx);
+      const doc = await ctx.store.getDocument(String(args.document_id_or_slug));
+      if (!doc) throw new ToolError("사진을 첨부할 문서를 찾을 수 없습니다. 먼저 Draft 문서를 만드세요.");
+      if (doc.category_slug === "secret" && user.role !== "admin") {
+        throw new ToolError("Secret 문서에는 관리자만 첨부할 수 있습니다.");
+      }
+      const file = await readImageFile(args);
+      const attachment = await ctx.store.uploadImage({ ...file, document_id: doc.id }, user.id);
+      return { status: "uploaded", ...attachment, file_name: file.file_name, file_size: file.bytes.byteLength };
+    },
+  },
+
+  {
     name: "create_document",
     description:
-      "Create and publish a document on CURI Wiki as the connected account. Pass the full Korean markdown body drafted from the source link. Set dry_run to preview the payload without writing.",
+      "Create and publish a document on CURI Wiki as the connected account. For articles with images, create a Draft without images, use upload_image to save the original files, then update_document with the returned markdown_url values. Never embed external, temporary, or data URLs. Set dry_run to preview without writing.",
     inputSchema: {
       type: "object",
       properties: {
@@ -168,6 +197,7 @@ export const tools: ToolDefinition[] = [
       if (args.dry_run) return { dry_run: true, payload: input };
 
       const user = await requireApproved(ctx);
+      requireUploadedImages(input.content_markdown, ctx.baseUrl);
       const existing = await ctx.store.getDocument(input.slug);
       if (existing) {
         throw new ToolError(
@@ -205,6 +235,11 @@ export const tools: ToolDefinition[] = [
       );
       if (!Object.keys(patch).length) throw new ToolError("변경할 필드를 하나 이상 지정하세요.");
       const user = await requireApproved(ctx);
+      if (typeof patch.content_markdown === "string") {
+        const previous = await ctx.store.getDocument(String(id_or_slug));
+        if (!previous) throw new ToolError("수정할 문서를 찾을 수 없습니다.");
+        requireUploadedImages(patch.content_markdown, ctx.baseUrl, previous.content_markdown);
+      }
       const doc = await ctx.store.updateDocument(String(id_or_slug), patch, user.id);
       return { status: "updated", document: doc, url: documentUrl(ctx.baseUrl, doc) };
     },

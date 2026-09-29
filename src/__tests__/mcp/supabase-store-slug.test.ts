@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createSupabaseWikiStore, type SupabaseLike } from '@/lib/mcp/supabase-store';
 
 type Row = {
@@ -107,6 +107,14 @@ describe('createSupabaseWikiStore id/slug lookup', () => {
     expect(calls.some((c) => c.op === 'select' && c.column === 'slug' && c.value === id)).toBe(false);
   });
 
+  it('resolves document IDs returned by the live wiki, including the doc- prefix', async () => {
+    const id = 'doc-123e4567-e89b-02d3-a456-426614174000';
+    const { db, calls } = makeDb({ docs: [{ id, slug: 'photos', title: 'Photos', category_id: 'cat-company' }] });
+    const store = createSupabaseWikiStore(db);
+    expect((await store.getDocument(id))?.id).toBe(id);
+    expect(calls.at(-1)).toMatchObject({ column: 'id', value: id });
+  });
+
   it('updateDocument uses slug branch for non-uuid input', async () => {
     const { db, calls } = makeDb({
       docs: [
@@ -120,5 +128,30 @@ describe('createSupabaseWikiStore id/slug lookup', () => {
     expect(updated.title).toBe('Updated');
     expect(calls.some((c) => c.op === 'update' && c.column === 'slug' && c.value === 'hello-world')).toBe(true);
     expect(calls.some((c) => c.op === 'update' && c.column === 'id' && c.value === 'hello-world')).toBe(false);
+  });
+});
+
+describe('MCP image storage', () => {
+  it.each([false, true])('stores original bytes and cleans up on metadata failure: %s', async (failRecord) => {
+    const upload = vi.fn(async (..._args: unknown[]) => ({ error: null }));
+    const remove = vi.fn(async () => ({}));
+    const insert = vi.fn(() => ({ select: () => ({ single: async () => failRecord
+      ? { data: null, error: { message: 'database failed' } }
+      : { data: { id: 'image-1' }, error: null } }) }));
+    const db = makeDb({ docs: [] }).db;
+    db.storage = { from: vi.fn(() => ({ upload, remove })) };
+    db.from = vi.fn(() => ({ insert }));
+    const store = createSupabaseWikiStore(db);
+    const bytes = new Uint8Array([1, 2, 3]);
+    const result = store.uploadImage({ bytes, file_name: 'photo.png', mime_type: 'image/png', document_id: 'doc-1' }, 'user-1');
+    if (failRecord) {
+      await expect(result).rejects.toThrow('database failed');
+      expect(remove).toHaveBeenCalledWith([upload.mock.calls[0][0]]);
+    } else {
+      await expect(result).resolves.toEqual({ id: 'image-1', markdown_url: '/api/upload/image-1/file' });
+      expect(remove).not.toHaveBeenCalled();
+    }
+    expect(upload).toHaveBeenCalledWith(expect.stringMatching(/^user-1\/.+\.png$/), bytes, { contentType: 'image/png', upsert: false });
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ document_id: 'doc-1', uploaded_by: 'user-1', file_size: 3 }));
   });
 });

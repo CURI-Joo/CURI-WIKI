@@ -92,7 +92,7 @@ function isPrivateAddress(address: string): boolean {
  * internal services. Resolve DNS first and refuse private address space; follow
  * redirects manually so each hop is checked too.
  */
-async function assertPublicUrl(url: URL) {
+export async function assertPublicUrl(url: URL) {
   if (!/^https?:$/.test(url.protocol)) {
     throw new Error("http 또는 https URL만 읽을 수 있습니다.");
   }

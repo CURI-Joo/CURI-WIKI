@@ -123,6 +123,7 @@ function EditForm({
   }, [categories, isAdmin]);
 
   const selectedCategory = categoryOptions.find((category) => category.id === categoryId);
+  const hasTableOfContents = doc.content_markdown.split('\n').filter((line) => /^#{1,3}\s/.test(line)).length > 2;
 
   useEffect(() => {
     let mounted = true;
@@ -326,7 +327,7 @@ function EditForm({
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className={`max-w-6xl mx-auto space-y-6 ${hasTableOfContents ? 'xl:pr-64' : ''}`}>
       <div className="flex items-center gap-2 text-sm text-text-muted">
         <Link href={`/documents/${doc.slug}`} className="hover:text-curi-pink transition-colors flex items-center gap-1">
           <ArrowLeft className="w-3.5 h-3.5" />
@@ -445,7 +446,7 @@ function EditForm({
       {editorMode === 'simple' ? (
         <>
           <p className="text-xs text-text-muted">
-            노션처럼 블록 기반으로 바로 입력하고, 이미지/링크/형광펜/파일을 문단 사이에 삽입할 수 있어요.
+            글을 읽을 때의 서식 그대로 수정하세요. 표 안의 글자도 바로 클릭해서 바꿀 수 있어요.
           </p>
           <NotionLikeEditor
             value={content}

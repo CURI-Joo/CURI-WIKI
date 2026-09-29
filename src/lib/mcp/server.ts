@@ -4,7 +4,7 @@ import { ToolError, runTool, tools } from "./wiki/tools";
 import type { WikiStore } from "./wiki/types";
 
 const SUPPORTED_PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
-const SERVER_INFO = { name: "curi-wiki", version: "1.0.0" };
+const SERVER_INFO = { name: "curi-wiki", version: "1.1.0" };
 
 export interface McpDeps {
   oauthStore: OAuthStore;
@@ -62,7 +62,7 @@ async function dispatch(msg: JsonRpcMessage, deps: McpDeps, auth: AuthContext) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: SERVER_INFO,
         instructions:
-          "CURI Wiki 문서를 읽고 작성합니다. 순서: whoami → fetch_source → search_documents → create_document. 글은 연결된 계정 명의로 저장됩니다.",
+          "CURI Wiki 문서를 읽고 작성합니다. 순서: whoami → fetch_source → search_documents → create_document. 글은 연결된 계정 명의로 저장됩니다. 사진은 실제 원본 파일을 upload_image로 위키 저장소에 저장한 후 반환된 markdown_url만 본문에 삽입하세요. 새 글에 사진이 있으면 먼저 사진 없이 Draft를 만들고 upload_image → update_document 순서로 완성하세요. 이미지 데이터나 외부 주소를 본문에 직접 넣지 마세요. 원본 파일을 읽을 수 없으면 사용자에게 원본을 요청하세요.",
       };
     }
     case "ping":

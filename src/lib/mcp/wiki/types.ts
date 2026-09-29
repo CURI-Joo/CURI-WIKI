@@ -9,6 +9,7 @@ export interface WikiUser {
   email: string | null;
   display_name: string | null;
   approved: boolean;
+  role?: string;
 }
 
 export interface WikiCategory {
@@ -42,6 +43,12 @@ export interface CreateDocumentInput {
 }
 
 export interface WikiStore {
+  uploadImage(input: {
+    bytes: Uint8Array;
+    file_name: string;
+    mime_type: string;
+    document_id: string;
+  }, uploaderId: string): Promise<{ id: string; markdown_url: string }>;
   getUser(userId: string): Promise<WikiUser | null>;
   listCategories(): Promise<WikiCategory[]>;
   searchDocuments(params: {

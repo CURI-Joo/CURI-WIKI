@@ -139,7 +139,6 @@ export default function DocumentDetailPage() {
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-text-primary">{doc.title}</h1>
-          <p className="text-text-secondary mt-1">{doc.summary}</p>
 
           {/* Meta */}
           <div className="flex flex-wrap items-center gap-4 mt-4 text-xs text-text-muted">

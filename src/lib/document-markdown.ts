@@ -1,4 +1,4 @@
-import { Marked } from 'marked';
+import { Marked, type Token, type Tokens } from 'marked';
 import { getHighlightColor, HIGHLIGHT_COLOR_PATTERN } from '@/lib/highlight-colors';
 import { getImageLayoutStyles, type ImageLayout } from '@/lib/image-layout';
 
@@ -92,10 +92,72 @@ function renderImage(alt: string, src: string, title: string | null) {
 
 const highlightPattern = new RegExp(`^==([^=\\n]+)==(?:\\{(${HIGHLIGHT_COLOR_PATTERN})\\})?`);
 
+function standaloneImage(token: Token): Tokens.Image | undefined {
+  if (token.type !== 'paragraph') return;
+  const inline = token.tokens?.filter((part: Token) => part.type !== 'text' || part.text.trim());
+  if (inline?.length === 1 && inline[0].type === 'image') return inline[0] as Tokens.Image;
+}
+
+/** Group block tokens after lexing, so layout markers inside code stay literal code. */
+function groupImageText(tokens: Token[]): Token[] {
+  const result: Token[] = [];
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token.type === 'blockquote') token.tokens = groupImageText(token.tokens ?? []);
+    if (token.type === 'list') {
+      for (const item of token.items) item.tokens = groupImageText(item.tokens);
+    }
+
+    if (token.type === 'imageTextBoundary' && token.edge === 'start') {
+      let end = index + 1;
+      let depth = 1;
+      for (; end < tokens.length; end++) {
+        const boundary = tokens[end];
+        if (boundary.type !== 'imageTextBoundary') continue;
+        depth += boundary.edge === 'start' ? 1 : -1;
+        if (!depth) break;
+      }
+      const first = tokens.findIndex((part, i) => i > index && i < end && part.type !== 'space');
+      const image = first >= 0 ? standaloneImage(tokens[first]) : undefined;
+      if (end < tokens.length && image && isSafeImageUrl(image.href)) {
+        result.push({ type: 'imageText', raw: tokens.slice(index, end + 1).map(part => part.raw).join(''),
+          image, tokens: groupImageText(tokens.slice(first + 1, end)) });
+        index = end;
+        continue;
+      }
+    }
+
+    const image = standaloneImage(token);
+    if (image && parseImageAlt(image.text).wrap && isSafeImageUrl(image.href)) {
+      let end = index + 1;
+      // Legacy wrap has no boundary. Stop at the next section, media, table or group.
+      while (end < tokens.length) {
+        const next = tokens[end];
+        if (!['space', 'paragraph', 'list', 'blockquote'].includes(next.type)
+          || 'tokens' in next && next.tokens?.some((part: Token) => part.type === 'image')) break;
+        end++;
+      }
+      result.push({ type: 'imageText', raw: tokens.slice(index, end).map(part => part.raw).join(''),
+        image, tokens: groupImageText(tokens.slice(index + 1, end)) });
+      index = end - 1;
+      continue;
+    }
+    result.push(token);
+  }
+  return result;
+}
+
 // Both reading and editing use this parser. Raw HTML is text, never executable markup.
 const markdown = new Marked({
   gfm: true,
   breaks: true,
+  hooks: {
+    processAllTokens(tokens) {
+      // Preserve the token list's link definitions.
+      tokens.splice(0, tokens.length, ...groupImageText(tokens));
+      return tokens;
+    },
+  },
   renderer: {
     html({ text }) {
       return /^<br\s*\/?\s*>$/i.test(text) ? '<br>' : escapeHtml(text);
@@ -131,6 +193,27 @@ const markdown = new Marked({
     },
   },
   extensions: [{
+    name: 'imageTextBoundary',
+    level: 'block',
+    start: source => source.search(/^ {0,3}:::image-text(?:-end)?[ \t]*$/m),
+    tokenizer(source) {
+      const match = /^ {0,3}:::image-text(-end)?[ \t]*(?:\n|$)/.exec(source);
+      if (match) return { type: 'imageTextBoundary', raw: match[0], edge: match[1] ? 'end' : 'start' };
+    },
+    // Invalid/incomplete groups stay visible instead of silently discarding content.
+    renderer: token => `<p>${escapeHtml(token.raw.trim())}</p>\n`,
+  }, {
+    name: 'imageText',
+    renderer(token) {
+      const image = token.image as Tokens.Image;
+      const parsed = parseImageAlt(image.text);
+      const align = parsed.layout === 'right' ? 'right' : 'left';
+      const width = parsed.width ?? IMAGE_WIDTH_BY_LEVEL[parsed.size];
+      const figure = renderImage(`${image.text}|wrap`, image.href, image.title);
+      return `<div data-kind="image-text" data-align="${align}" style="--image-width:${width}px">${figure}<div data-kind="image-text-body">${this.parser.parse(token.tokens ?? []) || '<p><br></p>'}</div></div>\n`;
+    },
+    childTokens: ['tokens'],
+  }, {
     name: 'highlight',
     level: 'inline',
     start: (source) => source.indexOf('=='),

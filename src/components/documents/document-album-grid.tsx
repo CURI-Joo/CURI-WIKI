@@ -95,10 +95,6 @@ export function DocumentAlbumGrid({
                 </div>
               </div>
 
-              <p className="mt-2 line-clamp-2 text-sm leading-6 text-text-secondary">
-                {doc.summary}
-              </p>
-
               <div className="mt-auto pt-4">
                 <div className="mb-3 flex items-center gap-2">
                   <span

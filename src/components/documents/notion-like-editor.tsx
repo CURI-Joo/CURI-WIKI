@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { Bold, Italic, List, ListOrdered, Quote, Minus, Columns2, ImagePlus, Link2, Loader2, Paperclip, Trash2 } from 'lucide-react';
+import { Bold, Italic, List, ListOrdered, Quote, Minus, Columns2, ImagePlus, Link2, Loader2, Paperclip, Trash2, ArrowDownToLine } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   ACCEPT_ATTRIBUTE,
@@ -24,7 +24,8 @@ import { getHighlightColor, type HighlightColor } from '@/lib/highlight-colors';
 import { prepareEditorHighlights } from '@/lib/editor-highlights';
 import { imageAtDeletePosition } from '@/lib/editor-image-deletion';
 import { editorHtmlToMarkdown } from '@/lib/editor-markdown';
-import { constrainImageOffset, getImageLayoutStyles, IMAGE_WRAP_GAP } from '@/lib/image-layout';
+import { constrainImageOffset, getImageLayoutStyles } from '@/lib/image-layout';
+import { continueBelowImageText, createImageTextGroup, unwrapImageTextGroup, IMAGE_TEXT_SELECTOR, IMAGE_TEXT_BODY_SELECTOR } from '@/lib/editor-image-text';
 
 type ImageResizeMode = 'e' | 'w' | 'n' | 's' | 'ne' | 'nw' | 'se' | 'sw';
 
@@ -109,8 +110,14 @@ function getImageContainerWidth(figure: HTMLElement) {
 }
 
 function getImageMaxWidth(figure: HTMLElement) {
-  const gap = figure.dataset.wrap === 'true' && figure.dataset.align !== 'center' ? IMAGE_WRAP_GAP : 0;
-  return Math.max(1, Math.floor(getImageContainerWidth(figure) - gap));
+  const width = getImageContainerWidth(figure);
+  const group = figure.parentElement?.matches(IMAGE_TEXT_SELECTOR);
+  const prose = figure.closest<HTMLElement>('.prose-curi');
+  const style = prose && window.getComputedStyle(prose);
+  const proseWidth = prose && style
+    ? prose.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) : width;
+  const stacked = proseWidth <= 560;
+  return Math.max(1, Math.floor(group && !stacked ? width / 2 : width));
 }
 
 function getConstrainedImageOffset(figure: HTMLElement, offset: number, width = figure.getBoundingClientRect().width) {
@@ -136,13 +143,18 @@ function applyImageFigureStyle(figure: HTMLElement) {
   const resizing = figure.dataset.resizing === 'true';
   const resizeMode = (figure.dataset.resizeMode as ImageResizeMode | undefined) ?? null;
   const wrap = figure.dataset.wrap === 'true';
+  const group = figure.parentElement?.matches(IMAGE_TEXT_SELECTOR) ? figure.parentElement : null;
+  if (group) {
+    group.dataset.align = align === 'right' ? 'right' : 'left';
+    group.style.setProperty('--image-width', `${widthPx}px`);
+  }
 
   figure.style.display = 'block';
   figure.style.position = 'relative';
   Object.assign(figure.style, getImageLayoutStyles({ layout: align, width: widthPx, offset, wrap }));
   figure.style.maxWidth = '100%';
-  figure.style.marginTop = '16px';
-  figure.style.marginBottom = '16px';
+  figure.style.marginTop = group ? '0px' : '16px';
+  figure.style.marginBottom = group ? '0px' : '16px';
   figure.style.transition = 'none';
   if (figure.dataset.dragging === 'true') {
     figure.style.cursor = 'grabbing';
@@ -194,18 +206,6 @@ function ensureTrailingParagraph(root: HTMLElement) {
   const paragraph = document.createElement('p');
   paragraph.append(document.createElement('br'));
   root.append(paragraph);
-}
-
-function ensureParagraphAfterFigure(figure: HTMLElement) {
-  const next = figure.nextElementSibling;
-  if (next && next.tagName.toLowerCase() === 'p') {
-    return next as HTMLElement;
-  }
-
-  const paragraph = document.createElement('p');
-  paragraph.append(document.createElement('br'));
-  figure.parentNode?.insertBefore(paragraph, figure.nextSibling);
-  return paragraph;
 }
 
 export function NotionLikeEditor({
@@ -356,6 +356,9 @@ export function NotionLikeEditor({
     if (selection && selection.rangeCount > 0) {
       let target: Node | null = selection.getRangeAt(0).commonAncestorContainer;
       while (target && target !== editorRef.current) {
+        if (target instanceof HTMLElement && target.matches(IMAGE_TEXT_SELECTOR)) {
+          return target.querySelector<HTMLElement>(':scope > figure[data-kind="image"]');
+        }
         if (target instanceof HTMLElement && target.tagName.toLowerCase() === 'figure' && target.dataset.kind === 'image') {
           activeImageFigureRef.current = target;
           return target;
@@ -632,7 +635,9 @@ export function NotionLikeEditor({
     }
 
     const current = (figure.dataset.align as ImageLayout | undefined) ?? 'center';
-    const next: ImageLayout = current === 'center' ? 'left' : current === 'left' ? 'right' : 'center';
+    const next: ImageLayout = figure.dataset.wrap === 'true'
+      ? current === 'right' ? 'left' : 'right'
+      : current === 'center' ? 'left' : current === 'left' ? 'right' : 'center';
     figure.dataset.align = next;
     applyImageFigureStyle(figure);
     emitChange();
@@ -645,10 +650,11 @@ export function NotionLikeEditor({
       return;
     }
 
-    const current = figure.dataset.wrap === 'true';
-    figure.dataset.wrap = current ? 'false' : 'true';
-
-    if (!current) {
+    const group = figure.closest<HTMLElement>(IMAGE_TEXT_SELECTOR);
+    if (group) {
+      unwrapImageTextGroup(group);
+      selectImageFigure(figure);
+    } else {
       const align = (figure.dataset.align as ImageLayout | undefined) ?? 'center';
       if (align === 'center') {
         figure.dataset.align = 'left';
@@ -659,13 +665,34 @@ export function NotionLikeEditor({
         figure.dataset.width = `${IMAGE_WRAP_DEFAULT_WIDTH}`;
       }
 
-      const paragraph = ensureParagraphAfterFigure(figure);
-      placeCaretAtParagraphStart(paragraph);
+      const { body } = createImageTextGroup(figure);
+      editorRef.current?.focus({ preventScroll: true });
+      placeCaretAtParagraphStart(body.firstElementChild as HTMLElement);
     }
 
     applyImageFigureStyle(figure);
     emitChange();
-  }, [emitChange, getCurrentImageFigure, placeCaretAtParagraphStart]);
+  }, [emitChange, getCurrentImageFigure, placeCaretAtParagraphStart, selectImageFigure]);
+
+  const continueBelowImage = useCallback(() => {
+    if (disabled) return;
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : selectionRef.current;
+    const anchor = range?.startContainer;
+    const element = anchor instanceof Element ? anchor : anchor?.parentElement;
+    const group = element?.closest<HTMLElement>(IMAGE_TEXT_SELECTOR)
+      ?? getCurrentImageFigure()?.closest<HTMLElement>(IMAGE_TEXT_SELECTOR);
+    if (!group || !editorRef.current?.contains(group)) {
+      setError('옆글 영역에 커서를 놓거나 이미지를 선택해 주세요.');
+      return;
+    }
+    const paragraph = continueBelowImageText(group, range);
+    setActiveImageFigure(null);
+    editorRef.current.focus({ preventScroll: true });
+    placeCaretAtParagraphStart(paragraph);
+    setError(null);
+    emitChange();
+  }, [disabled, emitChange, getCurrentImageFigure, placeCaretAtParagraphStart, setActiveImageFigure]);
 
   const insertAsset = useCallback(async (file: File, kind: 'image' | 'file') => {
     setError(null);
@@ -796,6 +823,19 @@ export function NotionLikeEditor({
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (disabled || event.nativeEvent.isComposing) return;
+    if (event.key === 'Enter' && !event.shiftKey) {
+      const selection = window.getSelection();
+      const node = selection?.anchorNode;
+      const element = node instanceof Element ? node : node?.parentElement;
+      const paragraph = element?.closest('p');
+      const body = paragraph?.parentElement;
+      if (selection?.isCollapsed && paragraph && body?.matches(IMAGE_TEXT_BODY_SELECTOR)
+        && paragraph === body.lastElementChild && !paragraph.textContent?.trim()) {
+        event.preventDefault();
+        continueBelowImage();
+        return;
+      }
+    }
     if (event.key === 'Backspace' || event.key === 'Delete') {
       const root = editorRef.current;
       const selection = window.getSelection();
@@ -834,7 +874,7 @@ export function NotionLikeEditor({
       event.preventDefault();
       placeCaretAtParagraphStart(next as HTMLElement);
     }
-  }, [deleteImageFigure, disabled, emitChange, insertLink, placeCaretAtParagraphStart, saveSelection, setActiveImageFigure]);
+  }, [continueBelowImage, deleteImageFigure, disabled, emitChange, insertLink, placeCaretAtParagraphStart, saveSelection, setActiveImageFigure]);
 
   const handleEditorMouseDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     if (disabled || event.button !== 0) return;
@@ -988,6 +1028,16 @@ export function NotionLikeEditor({
           className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
         >
           옆글 배치
+        </button>
+        <button
+          type="button"
+          onMouseDown={handleToolbarMouseDown}
+          onClick={continueBelowImage}
+          disabled={disabled}
+          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
+        >
+          <ArrowDownToLine className="h-4 w-4" />
+          아래에 이어 쓰기
         </button>
         <HighlightColorPicker onBeforeOpen={saveSelection} onSelect={insertHighlight} disabled={disabled} />
         <button

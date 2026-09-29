@@ -83,4 +83,41 @@ describe('NotionLikeEditor', () => {
     fireEvent.contextMenu(editor.querySelector('img')!, { clientX: 100, clientY: 100 });
     expect(screen.getByRole('menuitem', { name: '이미지 삭제' })).toBeVisible();
   });
+
+  it('continues below the image through the toolbar and keeps that boundary on reopening', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<NotionLikeEditor value={'![사진|wrap](/a.png)\n\n옆글'} onChange={onChange} />);
+    const editor = screen.getByRole('textbox');
+    const text = editor.querySelector('[data-kind="image-text-body"] p')!.firstChild!;
+    editor.focus();
+    const range = document.createRange();
+    range.setStart(text, text.textContent!.length);
+    range.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    fireEvent.click(screen.getByRole('button', { name: '아래에 이어 쓰기' }));
+    const below = editor.querySelector('[data-kind="image-text"]')!.nextElementSibling!;
+    expect(below.tagName).toBe('P');
+    below.textContent = '아래 본문';
+    fireEvent.input(editor);
+    const saved = onChange.mock.lastCall![0];
+    expect(saved).toContain(':::image-text-end\n\n아래 본문');
+    rerender(<NotionLikeEditor value={saved + '\n\n끝'} onChange={onChange} />);
+    expect(editor.querySelector('[data-kind="image-text"]')!.nextElementSibling?.textContent).toBe('아래 본문');
+  });
+
+  it('exits the side column on Enter in its last empty paragraph', () => {
+    render(<NotionLikeEditor value={'![사진|wrap](/a.png)'} onChange={vi.fn()} />);
+    const editor = screen.getByRole('textbox');
+    const paragraph = editor.querySelector('[data-kind="image-text-body"] p')!;
+    const range = document.createRange();
+    range.setStart(paragraph, 0);
+    range.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    fireEvent.keyDown(editor, { key: 'Enter' });
+    const anchor = window.getSelection()!.anchorNode as HTMLElement;
+    expect(anchor.closest('[data-kind="image-text"]')).toBeNull();
+    expect(editor.contains(anchor)).toBe(true);
+  });
 });

@@ -79,6 +79,15 @@ converter.addRule('wikiImage', {
   replacement: (_content, node) => imageMarkdown(node),
 });
 
+converter.addRule('imageText', {
+  filter: (node) => node.dataset.kind === 'image-text',
+  replacement(content, node) {
+    // Image deletion keeps the description as ordinary text and supports native Undo.
+    if (!node.querySelector(':scope > figure[data-kind="image"]')) return `\n\n${content}\n\n`;
+    return `\n\n:::image-text\n\n${content.trim()}\n\n:::image-text-end\n\n`;
+  },
+});
+
 converter.addRule('link', {
   filter: 'a',
   replacement(content, node) {

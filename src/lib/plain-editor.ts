@@ -11,6 +11,7 @@ export function markdownToPlainText(markdown: string): string {
   if (!markdown) return '';
 
   return markdown
+    .replace(/^ {0,3}:::image-text(?:-end)?[ \t]*$/gm, '')
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '')
     .replace(/\[📎\s+([^\]]+)\]\(([^)]+)\)/g, (_, label: string) => `📎 ${label}`)
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')

@@ -1,7 +1,5 @@
 export type ImageLayout = 'left' | 'center' | 'right';
 
-export const IMAGE_WRAP_GAP = 12;
-
 /** Keep alignment and dragging inside the available content width, including after a viewport resize. */
 export function getImageLayoutStyles({
   layout, width, offset, wrap,
@@ -11,13 +9,14 @@ export function getImageLayoutStyles({
   offset: number;
   wrap: boolean;
 }) {
-  if (wrap && layout !== 'center') {
+  // Wrapped images live in an explicit two-column group, never a document-wide float.
+  if (wrap) {
     return {
-      width: `min(calc(100% - ${IMAGE_WRAP_GAP}px), ${width}px)`,
-      float: layout,
+      width: `min(100%, ${width}px)`,
+      float: 'none',
       clear: 'none',
-      marginLeft: layout === 'right' ? `${IMAGE_WRAP_GAP}px` : '0px',
-      marginRight: layout === 'left' ? `${IMAGE_WRAP_GAP}px` : '0px',
+      marginLeft: '0px',
+      marginRight: '0px',
       transform: 'none',
     };
   }

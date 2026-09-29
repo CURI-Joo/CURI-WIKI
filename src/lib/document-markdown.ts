@@ -1,6 +1,7 @@
 import { Marked, type Token, type Tokens } from 'marked';
 import { getHighlightColor, HIGHLIGHT_COLOR_PATTERN } from '@/lib/highlight-colors';
 import { getImageLayoutStyles, type ImageLayout } from '@/lib/image-layout';
+import { readDriveMetadata } from '@/lib/document-drive';
 
 export type { ImageLayout } from '@/lib/image-layout';
 export type ImageSizeLevel = 1 | 2 | 3 | 4;
@@ -229,5 +230,5 @@ const markdown = new Marked({
 });
 
 export function renderDocumentMarkdown(content: string): string {
-  return markdown.parse(content, { async: false });
+  return markdown.parse(readDriveMetadata(content).body, { async: false });
 }

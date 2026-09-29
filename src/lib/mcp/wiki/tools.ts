@@ -2,6 +2,7 @@ import type { AuthContext } from "../oauth/flow";
 import { fetchSource } from "./source";
 import { readImageFile, requireUploadedImages } from "./images";
 import type { WikiStore } from "./types";
+import { normalizeDriveUrl } from "../../document-drive";
 
 export interface ToolContext {
   store: WikiStore;
@@ -177,6 +178,7 @@ export const tools: ToolDefinition[] = [
         tags: { type: "array", items: { type: "string" } },
         status: { type: "string", enum: ["Draft", "Published"] },
         source_url: { type: "string", description: "Original link this was written from." },
+        drive_url: { type: ["string", "null"], description: "Optional Google Drive folder/file or Google Docs HTTPS sharing link, shown below the title." },
         dry_run: { type: "boolean", description: "Return the payload without writing." },
       },
       required: ["title", "content_markdown"],
@@ -193,6 +195,7 @@ export const tools: ToolDefinition[] = [
         status: String(args.status || "Published"),
         tags: Array.isArray(args.tags) ? args.tags.map(String) : [],
         source_url: args.source_url ? String(args.source_url) : null,
+        ...(args.drive_url !== undefined ? { drive_url: normalizeDriveUrl(args.drive_url) } : {}),
       };
       if (args.dry_run) return { dry_run: true, payload: input };
 
@@ -219,6 +222,7 @@ export const tools: ToolDefinition[] = [
         id_or_slug: { type: "string" },
         title: { type: "string" },
         content_markdown: { type: "string" },
+        drive_url: { type: ["string", "null"], description: "Google Drive/Docs sharing link below the title. Omit to keep the current link; null removes it." },
         summary: { type: "string" },
         category_slug: { type: "string" },
         tags: { type: "array", items: { type: "string" } },
@@ -231,8 +235,9 @@ export const tools: ToolDefinition[] = [
     handler: async (args, ctx) => {
       const { id_or_slug, ...rest } = args;
       const patch = Object.fromEntries(
-        Object.entries(rest).filter(([, v]) => v !== undefined && v !== null),
+        Object.entries(rest).filter(([key, v]) => v !== undefined && (v !== null || key === "drive_url")),
       );
+      if (patch.drive_url !== undefined) patch.drive_url = normalizeDriveUrl(patch.drive_url);
       if (!Object.keys(patch).length) throw new ToolError("변경할 필드를 하나 이상 지정하세요.");
       const user = await requireApproved(ctx);
       if (typeof patch.content_markdown === "string") {

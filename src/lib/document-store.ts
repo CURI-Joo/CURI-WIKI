@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { normalizeCategoryId, resolveCategoryIdForDatabase } from '@/lib/category-migration';
 import { slugify } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
+import { mergeDriveMetadata } from '@/lib/document-drive';
 
 const DOCUMENTS_KEY = 'curi-wiki-documents-v2';
 const ACCESS_KEY = 'curi-wiki-document-access-v2';
@@ -20,6 +21,7 @@ interface DocumentStoreState {
 }
 
 interface CreateDocumentInput {
+  driveUrl?: string | null;
   title: string;
   summary: string;
   categoryId: string;
@@ -29,6 +31,7 @@ interface CreateDocumentInput {
 }
 
 interface UpdateDocumentInput {
+  driveUrl?: string | null;
   title: string;
   summary: string;
   categoryId: string;
@@ -234,7 +237,7 @@ function createLocalStoredDocument(input: CreateDocumentInput): Document {
     title: input.title.trim(),
     slug: createLocalUniqueSlug(input.title),
     summary: input.summary.trim(),
-    content_markdown: input.content,
+    content_markdown: mergeDriveMetadata(input.content, '', input.driveUrl),
     category_id: normalizeCategoryId(input.categoryId),
     owner_id: input.userId,
     status,
@@ -268,7 +271,7 @@ function updateLocalStoredDocument(
     title: input.title.trim(),
     slug: createLocalUniqueSlug(input.title, documentId),
     summary: input.summary.trim(),
-    content_markdown: input.content,
+    content_markdown: mergeDriveMetadata(input.content, existing.content_markdown, input.driveUrl),
     category_id: normalizeCategoryId(input.categoryId),
     status,
     updated_by: input.userId,
@@ -324,7 +327,7 @@ export async function createStoredDocument(
       title: input.title.trim(),
       slug,
       summary: input.summary.trim(),
-      content_markdown: input.content,
+      content_markdown: mergeDriveMetadata(input.content, '', input.driveUrl),
       category_id: databaseCategoryId,
       owner_id: input.userId,
       status,
@@ -350,11 +353,12 @@ export async function updateStoredDocument(
   const supabase = createClient();
   const slug = await createRemoteUniqueSlug(supabase, input.title, documentId);
   const databaseCategoryId = await resolveRemoteCategoryId(supabase, input.categoryId);
-  const { data: existing } = await supabase
+  const { data: existing, error: readError } = await supabase
     .from('documents')
-    .select('status, published_at')
+    .select('status, published_at, content_markdown')
     .eq('id', documentId)
     .single();
+  if (readError || !existing) throw new Error(readError?.message ?? '문서를 찾을 수 없습니다.');
   const status = input.status ?? ((existing as Pick<Document, 'status'> | null)?.status ?? 'Published');
   const now = new Date().toISOString();
 
@@ -364,7 +368,7 @@ export async function updateStoredDocument(
       title: input.title.trim(),
       slug,
       summary: input.summary.trim(),
-      content_markdown: input.content,
+      content_markdown: mergeDriveMetadata(input.content, existing?.content_markdown ?? '', input.driveUrl),
       category_id: databaseCategoryId,
       status,
       updated_by: input.userId,

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createSupabaseWikiStore, type SupabaseLike } from '@/lib/mcp/supabase-store';
+import { readDriveMetadata, writeDriveMetadata } from '@/lib/document-drive';
 
 type Row = {
   id: string;
@@ -153,5 +154,59 @@ describe('MCP image storage', () => {
     }
     expect(upload).toHaveBeenCalledWith(expect.stringMatching(/^user-1\/.+\.png$/), bytes, { contentType: 'image/png', upsert: false });
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ document_id: 'doc-1', uploaded_by: 'user-1', file_size: 3 }));
+  });
+});
+
+describe('MCP Drive shortcut persistence', () => {
+  const driveUrl = 'https://drive.google.com/drive/folders/qa-folder';
+  const makeRow = (): Row => ({ id: 'doc-1', slug: 'drive', title: '자료', category_id: 'cat-company',
+    source_url: 'https://example.com/original', content_markdown: '## 기존 본문\n\n내용' });
+
+  it('stores a Drive link on creation without requiring a new database column', async () => {
+    const { db } = makeDb({ docs: [] });
+    const insert = vi.fn((payload: Record<string, unknown>) => ({ select: () => ({
+      single: async () => ({ data: { ...makeRow(), ...payload }, error: null }),
+    }) }));
+    db.from = table => table === 'documents' ? { insert } : {
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'cat-company' }, error: null }) }) }),
+    };
+    const created = await createSupabaseWikiStore(db).createDocument({
+      title: '자료', slug: 'drive', category_slug: 'company', summary: '', status: 'Published', tags: [],
+      source_url: 'https://example.com/original', content_markdown: '## 본문', drive_url: driveUrl,
+    }, 'user-1');
+    expect(created).toMatchObject({ drive_url: driveUrl, content_markdown: '## 본문', source_url: 'https://example.com/original' });
+    expect(insert.mock.calls[0][0]).not.toHaveProperty('drive_url');
+    expect(readDriveMetadata(insert.mock.calls[0][0].content_markdown as string).driveUrl).toBe(driveUrl);
+  });
+
+  it('exposes a separate link and keeps it when a plugin replaces only the body', async () => {
+    const row = makeRow();
+    row.content_markdown = writeDriveMetadata(row.content_markdown!, driveUrl);
+    const store = createSupabaseWikiStore(makeDb({ docs: [row] }).db);
+    expect(await store.getDocument('drive')).toMatchObject({ drive_url: driveUrl, content_markdown: '## 기존 본문\n\n내용' });
+    const updated = await store.updateDocument('drive', { content_markdown: '## 수정 본문' }, 'user-1');
+    expect(updated).toMatchObject({ drive_url: driveUrl, content_markdown: '## 수정 본문', source_url: 'https://example.com/original' });
+    expect(readDriveMetadata(row.content_markdown!)).toEqual({ driveUrl, body: '## 수정 본문' });
+  });
+
+  it('adds, replaces and clears just the link while preserving the body and original source', async () => {
+    const row = makeRow();
+    const originalBody = row.content_markdown;
+    const store = createSupabaseWikiStore(makeDb({ docs: [row] }).db);
+    for (const link of [driveUrl, 'https://docs.google.com/document/d/qa/edit', null]) {
+      const updated = await store.updateDocument('drive', { drive_url: link }, 'user-1');
+      expect(updated).toMatchObject({ drive_url: link, content_markdown: originalBody, source_url: 'https://example.com/original' });
+      expect(row).not.toHaveProperty('drive_url');
+    }
+    expect(row.content_markdown).toBe(originalBody);
+  });
+
+  it('does not write an invalid link or update a missing document', async () => {
+    const row = makeRow();
+    const { db, calls } = makeDb({ docs: [row] });
+    const store = createSupabaseWikiStore(db);
+    await expect(store.updateDocument('drive', { drive_url: 'https://example.com' }, 'user-1')).rejects.toThrow('공유 링크');
+    await expect(store.updateDocument('missing', { drive_url: driveUrl }, 'user-1')).rejects.toThrow('문서를 찾을 수 없습니다');
+    expect(calls.filter(call => call.op === 'update')).toEqual([]);
   });
 });

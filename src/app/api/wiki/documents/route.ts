@@ -4,11 +4,13 @@ import { createClient as createSupabaseClient, type SupabaseClient } from '@supa
 import { normalizeCategorySlug, resolveCategoryIdForDatabase } from '@/lib/category-migration';
 import { slugify } from '@/lib/utils';
 import type { DocStatus } from '@/types';
+import { mergeDriveMetadata, readDriveMetadata, DRIVE_LINK_ERROR } from '@/lib/document-drive';
 
 type CreateWikiDocumentBody = {
   title?: string;
   summary?: string;
   content_markdown?: string;
+  drive_url?: string | null;
   category_id?: string;
   category_slug?: string;
   status?: DocStatus;
@@ -26,7 +28,7 @@ function getBearerToken(request: NextRequest): string | null {
 }
 
 function toSummary(contentMarkdown: string): string {
-  const plainText = contentMarkdown
+  const plainText = readDriveMetadata(contentMarkdown).body
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/`[^`]*`/g, ' ')
     .replace(/[#>*_~\-\[\]\(\)!]/g, ' ')
@@ -165,6 +167,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  let storedContent: string;
+  try {
+    storedContent = mergeDriveMetadata(contentMarkdown, '', body.drive_url);
+  } catch {
+    return NextResponse.json({ error: DRIVE_LINK_ERROR }, { status: 400 });
+  }
+
   const status: DocStatus = body.status ?? 'Published';
   if (!['Draft', 'Published', 'Archived'].includes(status)) {
     return NextResponse.json({ error: 'invalid_status' }, { status: 400 });
@@ -196,7 +205,7 @@ export async function POST(request: NextRequest) {
       title,
       slug,
       summary: body.summary?.trim() || toSummary(contentMarkdown),
-      content_markdown: contentMarkdown,
+      content_markdown: storedContent,
       category_id: categoryId,
       owner_id: user.id,
       status,

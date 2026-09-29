@@ -9,6 +9,13 @@
 - 영상 임베드 버튼/렌더링은 제거합니다.
 - 작성·수정 화면 하단에 별도의 첨부파일 목록을 표시하지 않습니다. 이미지와 파일은 본문 도구 모음에서 삽입하고 본문 안에서 확인합니다.
 
+## Document Drive Shortcut
+
+- 작성·수정 화면의 제목 아래에 선택 입력 항목인 `Google Drive 링크`를 둡니다. Google Drive 폴더·파일 또는 Google Docs의 HTTPS 공유 링크를 붙여넣습니다.
+- 링크가 있는 글만 제목 아래에 Google Drive 로고와 `Google Drive 바로가기`를 표시하고 새 탭으로 엽니다. 비워 두면 읽기 화면에 해당 공간을 만들지 않습니다.
+- 링크는 Markdown의 예약 헤더 `<!-- curi:drive-url URL -->`와 빈 줄로 저장합니다. 읽기·편집 본문과 요약에서는 분리하며 기존 원문 출처인 `source_url`은 보존합니다.
+- MCP `create_document` / `update_document`에서도 `drive_url`을 받습니다. 생략하면 유지하고, `null`이나 빈 문자열이면 제거합니다. 본문만 바꾸는 업데이트에서도 기존 링크를 보존합니다.
+
 ## Image and Text Layout
 
 - `옆글쓰기`는 사진·캡션과 설명을 하나의 두 칸 영역으로 묶습니다. 칸 사이 간격은 24px이며 이미지 칸은 본문 너비의 최대 50%입니다.

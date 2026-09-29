@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { NotionLikeEditor } from '@/components/documents/notion-like-editor';
+import { DocumentDriveField } from '@/components/documents/document-drive-link';
 
 type CategoryOption = {
   id: string;
@@ -67,6 +68,7 @@ export default function NewDocumentPage() {
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState(seedCategories[0]?.id ?? '');
   const [content, setContent] = useState('');
+  const [driveUrl, setDriveUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editorMode, setEditorMode] = useState<'simple' | 'markdown'>('simple');
@@ -172,6 +174,7 @@ export default function NewDocumentPage() {
         summary: buildSummaryFromMarkdown(content),
         categoryId,
         content,
+        driveUrl,
         userId: profile.id,
       });
 
@@ -309,6 +312,8 @@ export default function NewDocumentPage() {
         onChange={(e) => setTitle(e.target.value)}
         className="w-full text-2xl font-bold bg-transparent border-none text-text-primary placeholder:text-text-muted focus:outline-none"
       />
+
+      <DocumentDriveField value={driveUrl} onChange={setDriveUrl} disabled={saving} />
 
       <div className="max-w-xl space-y-2">
         <div className="flex items-center gap-2">

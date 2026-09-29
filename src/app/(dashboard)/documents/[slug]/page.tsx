@@ -19,6 +19,8 @@ import {
   User,
 } from 'lucide-react';
 import { normalizeCategoryId } from '@/lib/category-migration';
+import { DocumentDriveLink } from '@/components/documents/document-drive-link';
+import { readDriveMetadata } from '@/lib/document-drive';
 
 export default function DocumentDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -139,6 +141,7 @@ export default function DocumentDetailPage() {
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-text-primary">{doc.title}</h1>
+          <DocumentDriveLink url={readDriveMetadata(doc.content_markdown).driveUrl} />
 
           {/* Meta */}
           <div className="flex flex-wrap items-center gap-4 mt-4 text-xs text-text-muted">

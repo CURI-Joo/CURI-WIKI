@@ -33,6 +33,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { NotionLikeEditor } from '@/components/documents/notion-like-editor';
+import { DocumentDriveField } from '@/components/documents/document-drive-link';
+import { readDriveMetadata } from '@/lib/document-drive';
 
 type CategoryOption = {
   id: string;
@@ -108,7 +110,8 @@ function EditForm({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [title, setTitle] = useState(doc.title);
   const [categoryId, setCategoryId] = useState(normalizeCategoryId(doc.category_id));
-  const [content, setContent] = useState(doc.content_markdown);
+  const [content, setContent] = useState(() => readDriveMetadata(doc.content_markdown).body);
+  const [driveUrl, setDriveUrl] = useState(() => readDriveMetadata(doc.content_markdown).driveUrl ?? '');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editorMode, setEditorMode] = useState<'simple' | 'markdown'>('simple');
@@ -207,6 +210,7 @@ function EditForm({
         summary: buildSummaryFromMarkdown(content),
         categoryId,
         content,
+        driveUrl,
         userId,
       });
       setSaved(true);
@@ -341,6 +345,8 @@ function EditForm({
         onChange={(e) => setTitle(e.target.value)}
         className="w-full text-2xl font-bold bg-transparent border-none text-text-primary focus:outline-none"
       />
+
+      <DocumentDriveField value={driveUrl} onChange={setDriveUrl} disabled={saving} />
 
       <div className="max-w-xl space-y-2">
         <div className="flex items-center gap-2">

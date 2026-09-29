@@ -1,4 +1,5 @@
 import type { AuthCode, OAuthClient, OAuthStore, TokenRecord } from "./oauth/types";
+import { mergeDriveMetadata, readDriveMetadata } from "../document-drive";
 import type {
   CreateDocumentInput,
   WikiCategory,
@@ -108,7 +109,8 @@ export function createSupabaseWikiStore(db: SupabaseLike, schema: WikiSchema = {
     slug: row.slug,
     category_slug: categorySlug,
     summary: row.summary ?? "",
-    content_markdown: row.content_markdown ?? "",
+    content_markdown: readDriveMetadata(row.content_markdown ?? "").body,
+    drive_url: readDriveMetadata(row.content_markdown ?? "").driveUrl,
     status: row.status ?? "Published",
     tags: Array.isArray(row.tags) ? row.tags : [],
     source_url: row.source_url ?? null,
@@ -232,7 +234,7 @@ export function createSupabaseWikiStore(db: SupabaseLike, schema: WikiSchema = {
           slug: input.slug,
           category_id: categoryId,
           summary: input.summary,
-          content_markdown: input.content_markdown,
+          content_markdown: mergeDriveMetadata(input.content_markdown, "", input.drive_url),
           status: input.status,
           tags: input.tags,
           source_url: input.source_url ?? null,
@@ -247,18 +249,29 @@ export function createSupabaseWikiStore(db: SupabaseLike, schema: WikiSchema = {
     },
 
     async updateDocument(idOrSlug: string, patch: Partial<CreateDocumentInput>, editorId: string) {
+      const { drive_url, ...storedPatch } = patch;
+      const lookupColumn = isUuid(idOrSlug) ? "id" : "slug";
       const updatePayload: Record<string, unknown> = {
-        ...patch,
+        ...storedPatch,
         updated_by: editorId,
         updated_at: new Date().toISOString(),
       };
+
+      if (patch.content_markdown !== undefined || drive_url !== undefined) {
+        const { data: previous, error } = await db.from(documents)
+          .select("content_markdown").eq(lookupColumn, idOrSlug).maybeSingle();
+        if (error || !previous) throw new Error(`문서 조회 실패: ${error?.message ?? "문서를 찾을 수 없습니다."}`);
+        const previousContent = previous.content_markdown ?? "";
+        updatePayload.content_markdown = mergeDriveMetadata(
+          patch.content_markdown ?? previousContent, previousContent, drive_url,
+        );
+      }
 
       if (patch.category_slug) {
         updatePayload.category_id = await getCategoryIdBySlug(patch.category_slug);
         delete updatePayload.category_slug;
       }
 
-      const lookupColumn = isUuid(idOrSlug) ? "id" : "slug";
       const { data, error } = await db
         .from(documents)
         .update(updatePayload)

@@ -27,6 +27,7 @@ export interface WikiDocument {
   status: string;
   tags: string[];
   source_url: string | null;
+  drive_url?: string | null;
   author_id: string;
   updated_at?: string;
 }
@@ -40,6 +41,7 @@ export interface CreateDocumentInput {
   status: string;
   tags: string[];
   source_url?: string | null;
+  drive_url?: string | null;
 }
 
 export interface WikiStore {

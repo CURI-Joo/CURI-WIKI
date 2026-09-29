@@ -1,3 +1,7 @@
+import { HIGHLIGHT_COLOR_PATTERN } from '@/lib/highlight-colors';
+
+const highlightPattern = new RegExp(`==([^=\\n]+)==(?:\\{(?:${HIGHLIGHT_COLOR_PATTERN})\\})?`, 'g');
+
 /**
  * Markdown을 모르는 사용자도 편하게 작성할 수 있도록
  * 간단한 양방향 변환을 제공합니다.
@@ -11,7 +15,7 @@ export function markdownToPlainText(markdown: string): string {
     .replace(/\[📎\s+([^\]]+)\]\(([^)]+)\)/g, (_, label: string) => `📎 ${label}`)
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/==([^=\n]+)==(?:\{(?:yellow|green|blue|pink|purple)\})?/g, '$1')
+    .replace(highlightPattern, '$1')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/^#{1,6}\s+/gm, '')
     .replace(/^>\s?/gm, '')

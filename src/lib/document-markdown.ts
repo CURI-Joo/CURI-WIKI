@@ -1,5 +1,5 @@
 import { Marked } from 'marked';
-import { getHighlightColor } from '@/lib/highlight-colors';
+import { getHighlightColor, HIGHLIGHT_COLOR_PATTERN } from '@/lib/highlight-colors';
 import { getImageLayoutStyles, type ImageLayout } from '@/lib/image-layout';
 
 export type { ImageLayout } from '@/lib/image-layout';
@@ -90,6 +90,8 @@ function renderImage(alt: string, src: string, title: string | null) {
   return `<figure data-kind="image" data-align="${parsed.layout}" data-size="${parsed.size}" data-width="${width}" data-offset="${parsed.offset}" data-wrap="${parsed.wrap}" style="width:${style.width};float:${style.float};clear:${style.clear};margin-left:${style.marginLeft};margin-right:${style.marginRight};transform:${style.transform}"><img src="${escapeHtml(src)}" alt="${escapeHtml(parsed.label)}"${title ? ` title="${escapeHtml(title)}"` : ''} loading="lazy" draggable="false"><figcaption>${escapeHtml(parsed.label)}</figcaption></figure>`;
 }
 
+const highlightPattern = new RegExp(`^==([^=\\n]+)==(?:\\{(${HIGHLIGHT_COLOR_PATTERN})\\})?`);
+
 // Both reading and editing use this parser. Raw HTML is text, never executable markup.
 const markdown = new Marked({
   gfm: true,
@@ -133,7 +135,7 @@ const markdown = new Marked({
     level: 'inline',
     start: (source) => source.indexOf('=='),
     tokenizer(source) {
-      const match = /^==([^=\n]+)==(?:\{(yellow|green|blue|pink|purple)\})?/.exec(source);
+      const match = highlightPattern.exec(source);
       if (match) return { type: 'highlight', raw: match[0], color: match[2] ?? 'yellow', tokens: this.lexer.inlineTokens(match[1]) };
     },
     renderer(token) {

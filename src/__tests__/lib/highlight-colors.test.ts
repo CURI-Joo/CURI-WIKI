@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderDocumentMarkdown } from '@/lib/document-markdown';
 import { editorHtmlToMarkdown } from '@/lib/editor-markdown';
 import { prepareEditorHighlights } from '@/lib/editor-highlights';
-import { HIGHLIGHT_COLORS, highlightedMarkdown } from '@/lib/highlight-colors';
+import { HIGHLIGHT_COLORS, getHighlightColor, highlightedMarkdown } from '@/lib/highlight-colors';
 import { buildSummaryFromMarkdown } from '@/lib/plain-editor';
 
 function root(html: string) {
@@ -11,7 +11,11 @@ function root(html: string) {
   return element;
 }
 
-describe('five highlight colors', () => {
+describe('ten highlight colors', () => {
+  it('retains yellow as the default for previously saved highlights', () => {
+    expect(getHighlightColor(undefined).id).toBe('yellow');
+    expect(root(renderDocumentMarkdown('==기존 강조==')).querySelector('mark')!.dataset.highlightColor).toBe('yellow');
+  });
   it.each(HIGHLIGHT_COLORS)('preserves $label in editing, saving and reopening', (color) => {
     const source = highlightedMarkdown('강조 **굵게** 끝', color.id);
     expect(buildSummaryFromMarkdown(source)).toBe('강조 굵게 끝');

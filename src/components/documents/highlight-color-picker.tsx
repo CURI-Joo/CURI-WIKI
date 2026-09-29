@@ -49,12 +49,11 @@ export function HighlightColorPicker({
                 key={color.id} type="button" aria-label={`${color.label} 형광펜`} aria-pressed={selected === color.id}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => { setSelected(color.id); setOpen(false); onSelect(color.id); }}
-                className="flex flex-col items-center gap-1.5 rounded-lg py-1.5 text-xs text-text-secondary hover:bg-surface"
+                className="flex h-11 items-center justify-center rounded-lg hover:bg-surface"
               >
                 <span className="flex h-8 w-8 items-center justify-center rounded-full border border-black/10" style={{ backgroundColor: color.background }}>
                   {selected === color.id && <Check className="h-4 w-4 text-text-primary" />}
                 </span>
-                {color.label}
               </button>
             ))}
           </div>

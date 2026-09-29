@@ -84,7 +84,7 @@ describe('NotionLikeEditor', () => {
     expect(screen.getByRole('menuitem', { name: '이미지 삭제' })).toBeVisible();
   });
 
-  it('continues below the image through the toolbar and keeps that boundary on reopening', () => {
+  it('turns off side writing to continue below while preserving the existing column on reopening', () => {
     const onChange = vi.fn();
     const { rerender } = render(<NotionLikeEditor value={'![사진|wrap](/a.png)\n\n옆글'} onChange={onChange} />);
     const editor = screen.getByRole('textbox');
@@ -95,7 +95,10 @@ describe('NotionLikeEditor', () => {
     range.collapse(true);
     window.getSelection()!.removeAllRanges();
     window.getSelection()!.addRange(range);
-    fireEvent.click(screen.getByRole('button', { name: '아래에 이어 쓰기' }));
+    fireEvent.mouseUp(editor);
+    expect(screen.getByRole('button', { name: '옆글쓰기' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '옆글쓰기' }));
+    expect(screen.getByRole('button', { name: '옆글쓰기' })).toHaveAttribute('aria-pressed', 'false');
     const below = editor.querySelector('[data-kind="image-text"]')!.nextElementSibling!;
     expect(below.tagName).toBe('P');
     below.textContent = '아래 본문';
@@ -104,6 +107,24 @@ describe('NotionLikeEditor', () => {
     expect(saved).toContain(':::image-text-end\n\n아래 본문');
     rerender(<NotionLikeEditor value={saved + '\n\n끝'} onChange={onChange} />);
     expect(editor.querySelector('[data-kind="image-text"]')!.nextElementSibling?.textContent).toBe('아래 본문');
+  });
+
+  it('turns side writing back on from below without creating another group or moving below text', () => {
+    render(<NotionLikeEditor value={':::image-text\n\n![사진|wrap](/a.png)\n\n기존 옆글\n\n:::image-text-end\n\n아래 본문'} onChange={vi.fn()} />);
+    const editor = screen.getByRole('textbox');
+    const range = document.createRange();
+    range.selectNodeContents(editor.lastElementChild!);
+    range.collapse(false);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    fireEvent.mouseUp(editor);
+    const toggle = screen.getByRole('button', { name: '옆글쓰기' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(editor.querySelectorAll('[data-kind="image-text"]')).toHaveLength(1);
+    expect(editor.lastElementChild?.textContent).toBe('아래 본문');
+    expect(editor.querySelector('[data-kind="image-text-body"]')?.textContent?.trim()).toBe('기존 옆글');
   });
 
   it('exits the side column on Enter in its last empty paragraph', () => {

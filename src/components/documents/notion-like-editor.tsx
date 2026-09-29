@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { Bold, Italic, List, ListOrdered, Quote, Minus, Columns2, ImagePlus, Link2, Loader2, Paperclip, Trash2, ArrowDownToLine } from 'lucide-react';
+import { Bold, Italic, List, ListOrdered, Quote, Minus, ImagePlus, Link2, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   ACCEPT_ATTRIBUTE,
@@ -25,7 +25,7 @@ import { prepareEditorHighlights } from '@/lib/editor-highlights';
 import { imageAtDeletePosition } from '@/lib/editor-image-deletion';
 import { editorHtmlToMarkdown } from '@/lib/editor-markdown';
 import { constrainImageOffset, getImageLayoutStyles } from '@/lib/image-layout';
-import { continueBelowImageText, createImageTextGroup, unwrapImageTextGroup, IMAGE_TEXT_SELECTOR, IMAGE_TEXT_BODY_SELECTOR } from '@/lib/editor-image-text';
+import { continueBelowImageText, createImageTextGroup, emptyParagraph, imageWritingContext, IMAGE_TEXT_SELECTOR, IMAGE_TEXT_BODY_SELECTOR } from '@/lib/editor-image-text';
 
 type ImageResizeMode = 'e' | 'w' | 'n' | 's' | 'ne' | 'nw' | 'se' | 'sw';
 
@@ -220,12 +220,13 @@ export function NotionLikeEditor({
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const selectionRef = useRef<Range | null>(null);
   const activeImageFigureRef = useRef<HTMLElement | null>(null);
-  const dragStateRef = useRef<{ figure: HTMLElement; startX: number; startOffset: number; moved: boolean } | null>(null);
+  const dragStateRef = useRef<{ figure: HTMLElement; startX: number; startLeft: number; moved: boolean } | null>(null);
   const resizeStateRef = useRef<{ figure: HTMLElement; mode: ImageResizeMode; startX: number; startY: number; startWidth: number; moved: boolean } | null>(null);
   const markdownRef = useRef<string | null>(null);
   const [uploadingKind, setUploadingKind] = useState<'image' | 'file' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [imageMenu, setImageMenu] = useState<{ figure: HTMLElement; x: number; y: number } | null>(null);
+  const [writingBesideImage, setWritingBesideImage] = useState(false);
 
   const renderedHtml = useMemo(() => markdownToEditorHtml(value), [value]);
 
@@ -297,7 +298,17 @@ export function NotionLikeEditor({
     }
 
     selectionRef.current = range.cloneRange();
+    setWritingBesideImage(imageWritingContext(root, range).beside);
   }, []);
+
+  useEffect(() => {
+    const syncSelection = () => {
+      const selection = window.getSelection();
+      if (selection?.rangeCount && editorRef.current?.contains(selection.getRangeAt(0).commonAncestorContainer)) saveSelection();
+    };
+    document.addEventListener('selectionchange', syncSelection);
+    return () => document.removeEventListener('selectionchange', syncSelection);
+  }, [saveSelection]);
 
   const restoreSelection = useCallback(() => {
     const selection = window.getSelection();
@@ -478,11 +489,30 @@ export function NotionLikeEditor({
       if (!dragState) return;
 
       const deltaX = event.clientX - dragState.startX;
-      const nextOffset = getConstrainedImageOffset(dragState.figure, dragState.startOffset + deltaX);
-      if (nextOffset !== (Number(dragState.figure.dataset.offset ?? '0') || 0)) {
-        dragState.figure.dataset.offset = `${nextOffset}`;
+      if (Math.abs(deltaX) < 6 && !dragState.moved) return;
+      const figure = dragState.figure;
+      const group = figure.closest<HTMLElement>(IMAGE_TEXT_SELECTOR);
+      let align: ImageLayout;
+      let offset = 0;
+      if (group) {
+        const rect = group.getBoundingClientRect();
+        const center = rect.left + rect.width / 2;
+        if (Math.abs(event.clientX - center) < 16) return;
+        align = event.clientX > center ? 'right' : 'left';
+      } else {
+        const space = Math.max(0, getImageContainerWidth(figure) - figure.getBoundingClientRect().width);
+        const left = Math.max(0, Math.min(space, dragState.startLeft + deltaX));
+        // Use the nearest alignment anchor so dragging can reach either edge even
+        // when the persisted offset is limited, while following the pointer smoothly.
+        align = space === 0 ? 'center' : left < space / 4 ? 'left' : left > space * 3 / 4 ? 'right' : 'center';
+        const origin = align === 'left' ? 0 : align === 'right' ? space : space / 2;
+        offset = Math.trunc(left - origin);
+      }
+      if (align !== figure.dataset.align || offset !== (Number(figure.dataset.offset) || 0)) {
+        figure.dataset.align = align;
+        figure.dataset.offset = `${offset}`;
         dragState.moved = true;
-        applyImageFigureStyle(dragState.figure);
+        applyImageFigureStyle(figure);
       }
     };
 
@@ -627,57 +657,12 @@ export function NotionLikeEditor({
     emitChange();
   }, [disabled, emitChange, saveSelection]);
 
-  const toggleImageLayout = useCallback(() => {
-    const figure = getCurrentImageFigure();
-    if (!figure) {
-      setError('정렬을 바꿀 이미지를 먼저 선택해 주세요.');
-      return;
-    }
-
-    const current = (figure.dataset.align as ImageLayout | undefined) ?? 'center';
-    const next: ImageLayout = figure.dataset.wrap === 'true'
-      ? current === 'right' ? 'left' : 'right'
-      : current === 'center' ? 'left' : current === 'left' ? 'right' : 'center';
-    figure.dataset.align = next;
-    applyImageFigureStyle(figure);
-    emitChange();
-  }, [emitChange, getCurrentImageFigure]);
-
-  const toggleImageWrap = useCallback(() => {
-    const figure = getCurrentImageFigure();
-    if (!figure) {
-      setError('옆글 배치할 이미지를 먼저 선택해 주세요.');
-      return;
-    }
-
-    const group = figure.closest<HTMLElement>(IMAGE_TEXT_SELECTOR);
-    if (group) {
-      unwrapImageTextGroup(group);
-      selectImageFigure(figure);
-    } else {
-      const align = (figure.dataset.align as ImageLayout | undefined) ?? 'center';
-      if (align === 'center') {
-        figure.dataset.align = 'left';
-      }
-
-      const currentWidth = clampImageWidth(Number(figure.dataset.width ?? `${IMAGE_WIDTH_BY_LEVEL[DEFAULT_IMAGE_SIZE_LEVEL]}`));
-      if (currentWidth > IMAGE_WRAP_DEFAULT_WIDTH) {
-        figure.dataset.width = `${IMAGE_WRAP_DEFAULT_WIDTH}`;
-      }
-
-      const { body } = createImageTextGroup(figure);
-      editorRef.current?.focus({ preventScroll: true });
-      placeCaretAtParagraphStart(body.firstElementChild as HTMLElement);
-    }
-
-    applyImageFigureStyle(figure);
-    emitChange();
-  }, [emitChange, getCurrentImageFigure, placeCaretAtParagraphStart, selectImageFigure]);
-
   const continueBelowImage = useCallback(() => {
-    if (disabled) return;
+    const root = editorRef.current;
+    if (disabled || !root) return;
     const selection = window.getSelection();
-    const range = selection?.rangeCount ? selection.getRangeAt(0) : selectionRef.current;
+    const range = selection?.rangeCount && root.contains(selection.getRangeAt(0).commonAncestorContainer)
+      ? selection.getRangeAt(0) : selectionRef.current;
     const anchor = range?.startContainer;
     const element = anchor instanceof Element ? anchor : anchor?.parentElement;
     const group = element?.closest<HTMLElement>(IMAGE_TEXT_SELECTOR)
@@ -693,6 +678,47 @@ export function NotionLikeEditor({
     setError(null);
     emitChange();
   }, [disabled, emitChange, getCurrentImageFigure, placeCaretAtParagraphStart, setActiveImageFigure]);
+
+  const toggleSideWriting = useCallback(() => {
+    const root = editorRef.current;
+    if (disabled || !root) return;
+    const selection = window.getSelection();
+    const range = selection?.rangeCount && root.contains(selection.getRangeAt(0).commonAncestorContainer)
+      ? selection.getRangeAt(0) : selectionRef.current;
+    const context = imageWritingContext(root, range);
+    if (context.beside) {
+      continueBelowImage();
+      return;
+    }
+    const figure = context.figure ?? getCurrentImageFigure();
+    if (!figure) {
+      setError('옆에 글을 쓸 이미지를 먼저 선택해 주세요.');
+      return;
+    }
+    let group = figure.closest<HTMLElement>(IMAGE_TEXT_SELECTOR);
+    if (!group) {
+      if (figure.dataset.align === 'center') figure.dataset.align = 'left';
+      figure.dataset.width = `${Math.min(Number(figure.dataset.width) || IMAGE_WRAP_DEFAULT_WIDTH, IMAGE_WRAP_DEFAULT_WIDTH)}`;
+      group = createImageTextGroup(figure).group;
+    }
+    const body = group.querySelector<HTMLElement>(`:scope > ${IMAGE_TEXT_BODY_SELECTOR}`)!;
+    let paragraph = body.lastElementChild as HTMLElement | null;
+    if (!paragraph || paragraph.tagName !== 'P') {
+      paragraph = emptyParagraph();
+      body.append(paragraph);
+    }
+    root.focus({ preventScroll: true });
+    const next = document.createRange();
+    next.selectNodeContents(paragraph);
+    next.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(next);
+    setActiveImageFigure(null);
+    applyImageFigureStyle(figure);
+    saveSelection();
+    setError(null);
+    emitChange();
+  }, [continueBelowImage, disabled, emitChange, getCurrentImageFigure, saveSelection, setActiveImageFigure]);
 
   const insertAsset = useCallback(async (file: File, kind: 'image' | 'file') => {
     setError(null);
@@ -914,12 +940,13 @@ export function NotionLikeEditor({
     }
 
     figure.dataset.resizeMode = '';
-    if (figure.dataset.wrap === 'true') return;
-    const currentOffset = getConstrainedImageOffset(figure, Number(figure.dataset.offset ?? '0') || 0);
+    const parent = figure.parentElement!;
+    const parentStyle = window.getComputedStyle(parent);
+    const contentLeft = parent.getBoundingClientRect().left + parent.clientLeft + parseFloat(parentStyle.paddingLeft);
     dragStateRef.current = {
       figure,
       startX: event.clientX,
-      startOffset: currentOffset,
+      startLeft: figure.getBoundingClientRect().left - contentLeft,
       moved: false,
     };
 
@@ -1013,31 +1040,12 @@ export function NotionLikeEditor({
         <button
           type="button"
           onMouseDown={handleToolbarMouseDown}
-          onClick={toggleImageLayout}
+          onClick={toggleSideWriting}
+          aria-pressed={writingBesideImage}
           disabled={disabled}
-          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
+          className={`inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 ${writingBesideImage ? 'border-curi-pink bg-curi-pink-soft text-curi-pink' : 'border-border text-text-secondary hover:bg-surface-elevated hover:text-text-primary'}`}
         >
-          <Columns2 className="h-4 w-4" />
-          좌우
-        </button>
-        <button
-          type="button"
-          onMouseDown={handleToolbarMouseDown}
-          onClick={toggleImageWrap}
-          disabled={disabled}
-          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
-        >
-          옆글 배치
-        </button>
-        <button
-          type="button"
-          onMouseDown={handleToolbarMouseDown}
-          onClick={continueBelowImage}
-          disabled={disabled}
-          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
-        >
-          <ArrowDownToLine className="h-4 w-4" />
-          아래에 이어 쓰기
+          옆글쓰기
         </button>
         <HighlightColorPicker onBeforeOpen={saveSelection} onSelect={insertHighlight} disabled={disabled} />
         <button

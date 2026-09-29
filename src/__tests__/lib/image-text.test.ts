@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderDocumentMarkdown } from '@/lib/document-markdown';
 import { editorHtmlToMarkdown } from '@/lib/editor-markdown';
-import { continueBelowImageText, createImageTextGroup, unwrapImageTextGroup } from '@/lib/editor-image-text';
+import { continueBelowImageText, createImageTextGroup, imageWritingContext } from '@/lib/editor-image-text';
 import { markdownToPlainText } from '@/lib/plain-editor';
 
 function render(source: string) {
@@ -83,16 +83,27 @@ describe('bounded image and text layout', () => {
     expect(reopened.lastElementChild?.textContent).toBe('아래글');
   });
 
-  it('toggles grouping without changing text or absorbing the next section', () => {
+  it('starts side writing without pulling existing below-image content into the column', () => {
     const root = render(legacy.replace('|wrap', ''));
     const before = root.textContent?.replace(/\s/g, '');
     const { group, body } = createImageTextGroup(root.querySelector('figure')!);
-    expect(body.querySelectorAll('li')).toHaveLength(2);
-    expect(group.nextElementSibling?.tagName).toBe('H2');
-    unwrapImageTextGroup(group);
-    expect(root.querySelector('[data-kind="image-text"]')).toBeNull();
-    expect(root.querySelector('figure')?.dataset.wrap).toBe('false');
+    expect(body.textContent?.trim()).toBe('');
+    expect(group.nextElementSibling?.tagName).toBe('UL');
+    expect(root.querySelector('figure')?.dataset.wrap).toBe('true');
     expect(root.textContent?.replace(/\s/g, '')).toBe(before);
+  });
+
+  it('tracks side-writing state at the caret and finds the image again from the paragraph below', () => {
+    const root = render(':::image-text\n\n![사진|wrap](/a.png)\n\n옆글\n\n:::image-text-end\n\n아래글');
+    const range = document.createRange();
+    range.selectNodeContents(root.querySelector('[data-kind="image-text-body"] p')!);
+    range.collapse(false);
+    expect(imageWritingContext(root, range)).toEqual({ figure: root.querySelector('figure'), beside: true });
+    range.selectNodeContents(root.lastElementChild!);
+    range.collapse(false);
+    expect(imageWritingContext(root, range)).toEqual({ figure: root.querySelector('figure'), beside: false });
+    range.selectNode(root.querySelector('figure')!);
+    expect(imageWritingContext(root, range).beside).toBe(true);
   });
 
   it('starts a plain paragraph below when continuing from the end of a list', () => {

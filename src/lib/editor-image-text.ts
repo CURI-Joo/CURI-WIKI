@@ -12,29 +12,38 @@ export function createImageTextGroup(figure: HTMLElement) {
   group.dataset.kind = 'image-text';
   const body = document.createElement('div');
   body.dataset.kind = 'image-text-body';
-  let next = figure.nextSibling;
   figure.before(group);
   group.append(figure, body);
-  // Include the existing description, but leave subsequent sections/media below.
-  while (next) {
-    const following = next.nextSibling;
-    if (next instanceof HTMLElement) {
-      if (!next.matches('p, ul, ol, blockquote') || next.querySelector('figure, img, table')) break;
-    } else if (next.textContent?.trim()) break;
-    body.append(next);
-    next = following;
-  }
-  if (!body.firstElementChild) body.append(emptyParagraph());
+  // Starting side writing must not pull existing below-image content into the column.
+  body.append(emptyParagraph());
   figure.dataset.wrap = 'true';
   return { group, body };
 }
 
-export function unwrapImageTextGroup(group: HTMLElement) {
-  const figure = group.querySelector<HTMLElement>(':scope > figure');
-  const body = group.querySelector<HTMLElement>(`:scope > ${IMAGE_TEXT_BODY_SELECTOR}`);
-  if (!figure || !body) return;
-  figure.dataset.wrap = 'false';
-  group.replaceWith(figure, ...Array.from(body.childNodes));
+export function imageWritingContext(root: HTMLElement, range: Range | null) {
+  if (!range || !root.contains(range.commonAncestorContainer)) return { figure: null, beside: false };
+  const node = range.startContainer;
+  const element = node instanceof Element ? node : node.parentElement;
+  const group = element?.closest(IMAGE_TEXT_SELECTOR);
+  const groupedImage = group?.querySelector<HTMLElement>(':scope > figure[data-kind="image"]');
+  if (groupedImage) return { figure: groupedImage, beside: true };
+
+  const selected = !range.collapsed && node === range.endContainer
+    && range.endOffset === range.startOffset + 1 ? node.childNodes[range.startOffset] : null;
+  const figure = selected instanceof HTMLElement && selected.matches('figure[data-kind="image"]')
+    ? selected : element?.closest<HTMLElement>('figure[data-kind="image"]');
+  if (figure) return { figure, beside: !!figure.closest(IMAGE_TEXT_SELECTOR) };
+
+  let block = element;
+  while (block?.parentElement && block.parentElement !== root) block = block.parentElement;
+  let previous = node === root ? root.childNodes[range.startOffset - 1] : block?.previousSibling;
+  while (previous && (!previous.textContent?.trim() && !(previous instanceof Element && previous.querySelector('img, input, hr, table')))) {
+    previous = previous.previousSibling;
+  }
+  const previousElement = previous instanceof HTMLElement ? previous : null;
+  const nearby = previousElement?.matches('figure[data-kind="image"]') ? previousElement
+    : previousElement?.matches(IMAGE_TEXT_SELECTOR) ? previousElement.querySelector<HTMLElement>(':scope > figure') : null;
+  return { figure: nearby ?? null, beside: false };
 }
 
 const isEmptyBlock = (node: Element) => !node.textContent?.trim()

@@ -6,7 +6,6 @@ import { seedCategories } from '@/data/seed-categories';
 import { updateStoredDocument, useDocumentStore } from '@/lib/document-store';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MarkdownImageUploadButton } from '@/components/documents/markdown-image-upload-button';
-import { DocumentAttachments } from '@/components/documents/document-attachments';
 import { buildSummaryFromMarkdown } from '@/lib/plain-editor';
 import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react';
 import Link from 'next/link';
@@ -469,8 +468,6 @@ function EditForm({
           />
         </>
       )}
-
-      <DocumentAttachments documentId={doc.id} userId={userId} isAdmin={isAdmin} />
 
       <div className="flex items-center justify-between py-3">
         <span className="text-xs text-text-muted">{saving ? '저장 중...' : saved ? '저장 완료' : ''}</span>

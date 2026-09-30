@@ -97,7 +97,8 @@ body {
 .prose-curi code { padding: 2px 6px; border-radius: 4px; background: var(--surface-elevated); color: var(--curi-pink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .prose-curi pre { padding: 16px; margin: 16px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--background); overflow-x: auto; white-space: pre; }
 .prose-curi pre code { padding: 0; border: 0; background: transparent; color: var(--text-secondary); }
-.prose-curi mark { background-color: #fef08a; color: var(--text-primary); }
+.prose-curi mark { background-color: #fef08a; color: inherit; }
+.prose-curi [data-text-color] :is(a, code) { color: inherit; }
 /* Keep the native background color intact for recoloring and Undo in the editor. */
 .pencil-highlight,
 .prose-curi mark,

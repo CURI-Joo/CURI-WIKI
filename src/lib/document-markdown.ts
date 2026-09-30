@@ -1,5 +1,6 @@
 import { Marked, type Token, type Tokens } from 'marked';
 import { getHighlightColor, HIGHLIGHT_COLOR_PATTERN } from '@/lib/highlight-colors';
+import { getTextColor, TEXT_COLOR_PATTERN } from '@/lib/text-colors';
 import { getImageLayoutStyles, type ImageLayout } from '@/lib/image-layout';
 import { readDriveMetadata } from '@/lib/document-drive';
 import { imagePreviewUrl } from '@/lib/image-preview';
@@ -94,6 +95,38 @@ function renderImage(alt: string, src: string, title: string | null) {
 }
 
 const highlightPattern = new RegExp(`^==([^=\\n]+)==(?:\\{(${HIGHLIGHT_COLOR_PATTERN})\\})?`);
+const textColorOpening = new RegExp(`^\\{\\{color:(${TEXT_COLOR_PATTERN})\\}\\}`);
+
+function matchTextColor(source: string) {
+  const opening = textColorOpening.exec(source);
+  if (!opening) return;
+  const boundaries = new RegExp(String.raw`\\[\s\S]|\{\{color:(?:${TEXT_COLOR_PATTERN})\}\}|\{\{/color\}\}` + '|`+', 'g');
+  boundaries.lastIndex = opening[0].length;
+  let depth = 1;
+  let boundary: RegExpExecArray | null;
+  while ((boundary = boundaries.exec(source))) {
+    const marker = boundary[0];
+    if (marker.startsWith('\\')) continue;
+    if (marker.startsWith('`')) {
+      // Delimiters inside an inline code span are literal text.
+      const backticks = /`+/g;
+      backticks.lastIndex = boundaries.lastIndex;
+      let closing: RegExpExecArray | null;
+      while ((closing = backticks.exec(source))) {
+        if (closing[0].length !== marker.length) continue;
+        boundaries.lastIndex = backticks.lastIndex;
+        break;
+      }
+      continue;
+    }
+    depth += marker === '{{/color}}' ? -1 : 1;
+    if (depth === 0) return {
+      raw: source.slice(0, boundaries.lastIndex),
+      color: opening[1],
+      content: source.slice(opening[0].length, boundary.index),
+    };
+  }
+}
 
 function standaloneImage(token: Token): Tokens.Image | undefined {
   if (token.type !== 'paragraph') return;
@@ -222,6 +255,18 @@ const markdown = new Marked({
       return `<div data-kind="image-text" data-align="${align}" style="--image-width:${width}px">${figure}<div data-kind="image-text-body">${this.parser.parse(token.tokens ?? []) || '<p><br></p>'}</div></div>\n`;
     },
     childTokens: ['tokens'],
+  }, {
+    name: 'textColor',
+    level: 'inline',
+    start: source => source.indexOf('{{color:'),
+    tokenizer(source) {
+      const match = matchTextColor(source);
+      if (match) return { type: 'textColor', raw: match.raw, color: match.color, tokens: this.lexer.inlineTokens(match.content) };
+    },
+    renderer(token) {
+      const color = getTextColor(token.color);
+      return `<span data-text-color="${color.id}" style="color:${color.color}">${this.parser.parseInline(token.tokens ?? [])}</span>`;
+    },
   }, {
     name: 'highlight',
     level: 'inline',

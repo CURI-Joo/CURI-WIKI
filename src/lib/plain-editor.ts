@@ -1,5 +1,6 @@
 import { HIGHLIGHT_COLOR_PATTERN } from '@/lib/highlight-colors';
 import { readDriveMetadata } from '@/lib/document-drive';
+import { stripTextColorMarkup } from '@/lib/text-colors';
 
 const highlightPattern = new RegExp(`==([^=\\n]+)==(?:\\{(?:${HIGHLIGHT_COLOR_PATTERN})\\})?`, 'g');
 
@@ -11,7 +12,7 @@ const highlightPattern = new RegExp(`==([^=\\n]+)==(?:\\{(?:${HIGHLIGHT_COLOR_PA
 export function markdownToPlainText(markdown: string): string {
   if (!markdown) return '';
 
-  return readDriveMetadata(markdown).body
+  return stripTextColorMarkup(readDriveMetadata(markdown).body)
     .replace(/^ {0,3}:::image-text(?:-end)?[ \t]*$/gm, '')
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '')
     .replace(/\[📎\s+([^\]]+)\]\(([^)]+)\)/g, (_, label: string) => `📎 ${label}`)

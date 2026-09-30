@@ -1,6 +1,8 @@
 import TurndownService from 'turndown';
 import { getHighlightColor, highlightedMarkdown } from '@/lib/highlight-colors';
 import { normalizeHighlightsForMarkdown } from '@/lib/editor-highlights';
+import { normalizeTextColorsForMarkdown } from '@/lib/editor-text-colors';
+import { getTextColor, textColorMarkdown } from '@/lib/text-colors';
 import { originalImageUrl } from '@/lib/image-preview';
 import { isSafeVideoUrl, videoMarkdown } from '@/lib/document-video';
 import {
@@ -69,6 +71,11 @@ const converter = new TurndownService({
 converter.addRule('highlight', {
   filter: 'mark',
   replacement: (content, node) => highlightedMarkdown(content, getHighlightColor(node.dataset.highlightColor).id),
+});
+
+converter.addRule('textColor', {
+  filter: node => node.tagName === 'SPAN' && !!node.dataset.textColor,
+  replacement: (content, node) => textColorMarkdown(content, getTextColor(node.dataset.textColor).id),
 });
 
 converter.addRule('strikethrough', {
@@ -149,6 +156,7 @@ export function editorHtmlToMarkdown(root: HTMLElement): string {
   // Work on a clone so serializing cannot move the user's caret or rewrite the editor.
   const clone = root.cloneNode(true) as HTMLElement;
   normalizeHighlightsForMarkdown(clone);
+  normalizeTextColorsForMarkdown(clone);
   const checkboxes = root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
   clone.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((input, index) => {
     input.toggleAttribute('checked', checkboxes[index].checked);

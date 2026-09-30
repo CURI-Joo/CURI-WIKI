@@ -97,7 +97,26 @@ body {
 .prose-curi code { padding: 2px 6px; border-radius: 4px; background: var(--surface-elevated); color: var(--curi-pink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .prose-curi pre { padding: 16px; margin: 16px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--background); overflow-x: auto; white-space: pre; }
 .prose-curi pre code { padding: 0; border: 0; background: transparent; color: var(--text-secondary); }
-.prose-curi mark { background: #fef08a; color: var(--text-primary); padding: 0 2px; border-radius: 4px; }
+.prose-curi mark { background-color: #fef08a; color: inherit; }
+.prose-curi [data-text-color] :is(a, code) { color: inherit; }
+/* Keep the native background color intact for recoloring and Undo in the editor. */
+.pencil-highlight,
+.prose-curi mark,
+.notion-like-editor span[style*="background-color"] {
+  background-image:
+    linear-gradient(176deg, var(--pencil-paper, var(--surface)) 0%, transparent 14% 83%, var(--pencil-paper, var(--surface)) 100%),
+    url('/pencil-grain.svg');
+  background-size: 100% 100%, 88px 1.35em;
+  background-repeat: no-repeat, repeat;
+  border-radius: .08em .15em .06em .12em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.prose-curi mark,
+.notion-like-editor span[style*="background-color"] { padding: 0 .07em; }
+.pencil-highlight { --pencil-paper: var(--background); }
+.highlight-palette .pencil-highlight { transform: rotate(-3deg); }
+.highlight-palette button:nth-child(even) .pencil-highlight { transform: rotate(2deg); }
 .prose-curi a { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 2px 6px; color: var(--text-secondary); font-size: 13px; font-weight: 500; text-decoration: none; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .prose-curi a:hover { color: var(--curi-pink); background: var(--surface-elevated); }
 .prose-curi a[data-attachment="true"] { display: block; margin: 8px 0; padding: 8px 12px; border-radius: 8px; font-size: 14px; }

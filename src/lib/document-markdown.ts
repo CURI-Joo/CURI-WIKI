@@ -1,5 +1,6 @@
 import { Marked, type Token, type Tokens } from 'marked';
 import { getHighlightColor, HIGHLIGHT_COLOR_PATTERN } from '@/lib/highlight-colors';
+import { getTextColor, TEXT_COLOR_PATTERN } from '@/lib/text-colors';
 import { getImageLayoutStyles, type ImageLayout } from '@/lib/image-layout';
 import { readDriveMetadata } from '@/lib/document-drive';
 import { imagePreviewUrl } from '@/lib/image-preview';
@@ -94,6 +95,39 @@ function renderImage(alt: string, src: string, title: string | null) {
 }
 
 const highlightPattern = new RegExp(`^==([^=\\n]+)==(?:\\{(${HIGHLIGHT_COLOR_PATTERN})\\})?`);
+const textColorOpening = new RegExp(`^\\{\\{color:(${TEXT_COLOR_PATTERN})\\}\\}`);
+const headingId = (text: string) => text.toLowerCase().replace(/\s+/g, '-');
+
+function matchTextColor(source: string) {
+  const opening = textColorOpening.exec(source);
+  if (!opening) return;
+  const boundaries = new RegExp(String.raw`\\[\s\S]|\{\{color:(?:${TEXT_COLOR_PATTERN})\}\}|\{\{/color\}\}` + '|`+', 'g');
+  boundaries.lastIndex = opening[0].length;
+  let depth = 1;
+  let boundary: RegExpExecArray | null;
+  while ((boundary = boundaries.exec(source))) {
+    const marker = boundary[0];
+    if (marker.startsWith('\\')) continue;
+    if (marker.startsWith('`')) {
+      // Delimiters inside an inline code span are literal text.
+      const backticks = /`+/g;
+      backticks.lastIndex = boundaries.lastIndex;
+      let closing: RegExpExecArray | null;
+      while ((closing = backticks.exec(source))) {
+        if (closing[0].length !== marker.length) continue;
+        boundaries.lastIndex = backticks.lastIndex;
+        break;
+      }
+      continue;
+    }
+    depth += marker === '{{/color}}' ? -1 : 1;
+    if (depth === 0) return {
+      raw: source.slice(0, boundaries.lastIndex),
+      color: opening[1],
+      content: source.slice(opening[0].length, boundary.index),
+    };
+  }
+}
 
 function standaloneImage(token: Token): Tokens.Image | undefined {
   if (token.type !== 'paragraph') return;
@@ -167,7 +201,7 @@ const markdown = new Marked({
       return /^<br\s*\/?\s*>$/i.test(text) ? '<br>' : escapeHtml(text);
     },
     heading({ depth, text, tokens }) {
-      const id = escapeHtml(text.toLowerCase().replace(/\s+/g, '-'));
+      const id = escapeHtml(headingId(text));
       return `<h${depth} id="${id}">${this.parser.parseInline(tokens)}</h${depth}>\n`;
     },
     image({ text, href, title }) {
@@ -223,6 +257,18 @@ const markdown = new Marked({
     },
     childTokens: ['tokens'],
   }, {
+    name: 'textColor',
+    level: 'inline',
+    start: source => source.indexOf('{{color:'),
+    tokenizer(source) {
+      const match = matchTextColor(source);
+      if (match) return { type: 'textColor', raw: match.raw, color: match.color, tokens: this.lexer.inlineTokens(match.content) };
+    },
+    renderer(token) {
+      const color = getTextColor(token.color);
+      return `<span data-text-color="${color.id}" style="color:${color.color}">${this.parser.parseInline(token.tokens ?? [])}</span>`;
+    },
+  }, {
     name: 'highlight',
     level: 'inline',
     start: (source) => source.indexOf('=='),
@@ -240,4 +286,32 @@ const markdown = new Marked({
 export function renderDocumentMarkdown(content: string): string {
   const html = markdown.parse(readDriveMetadata(content).body, { async: false });
   return html.replace(/(<img\b[^>]*?) loading="lazy"/, '$1 loading="eager" fetchpriority="high"');
+}
+
+function inlineText(tokens: Token[]): string {
+  return tokens.map(token => {
+    if (token.type === 'br') return ' ';
+    if ('tokens' in token && token.tokens) return inlineText(token.tokens);
+    if (!('text' in token)) return '';
+    return token.type === 'text' ? decodeHeadingEntities(token.text) : token.text;
+  }).join('');
+}
+
+function decodeHeadingEntities(text: string) {
+  const entities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+  return text.replace(/&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (entity, name: string) => {
+    if (!name.startsWith('#')) return entities[name.toLowerCase()] ?? entity;
+    const value = name[1].toLowerCase() === 'x' ? parseInt(name.slice(2), 16) : Number(name.slice(1));
+    return value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : entity;
+  });
+}
+
+/** Use the reader's tokens for labels and anchors, excluding headings inside code. */
+export function getDocumentHeadings(content: string) {
+  const headings: { level: number; text: string; id: string }[] = [];
+  markdown.walkTokens(markdown.lexer(readDriveMetadata(content).body), token => {
+    if (token.type !== 'heading' || token.depth > 3) return;
+    headings.push({ level: token.depth, text: inlineText(token.tokens ?? []), id: headingId(token.text) });
+  });
+  return headings;
 }

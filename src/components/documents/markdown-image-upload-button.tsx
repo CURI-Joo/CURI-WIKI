@@ -12,6 +12,8 @@ import {
   maxSizeFor,
 } from '@/lib/upload-constraints';
 import { HighlightColorPicker } from '@/components/documents/highlight-color-picker';
+import { TextColorPicker } from '@/components/documents/text-color-picker';
+import { textColorMarkdown, type TextColor } from '@/lib/text-colors';
 import { highlightedMarkdown, type HighlightColor } from '@/lib/highlight-colors';
 import { formatFileSize } from '@/lib/utils';
 import { uploadVideo } from '@/lib/upload-video';
@@ -284,6 +286,22 @@ export function MarkdownImageUploadButton({
     void insertAsset(file, 'file');
   };
 
+  const handleInsertTextColor = (color: TextColor) => {
+    setError(null);
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = content.slice(start, end) || '글자색 텍스트';
+    const colored = textColorMarkdown(text, color);
+    onContentChange(current => current.slice(0, start) + colored + current.slice(end));
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const innerStart = start + `{{color:${color}}}`.length;
+      textarea.setSelectionRange(innerStart, innerStart + text.length);
+    });
+  };
+
   const handleInsertHighlight = (color: HighlightColor) => {
     setError(null);
 
@@ -344,6 +362,11 @@ export function MarkdownImageUploadButton({
       </button>
       <HighlightColorPicker
         onSelect={handleInsertHighlight}
+        disabled={disabled || uploadingKind !== null}
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
+      />
+      <TextColorPicker
+        onSelect={handleInsertTextColor}
         disabled={disabled || uploadingKind !== null}
         className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50"
       />

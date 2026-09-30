@@ -21,6 +21,9 @@ import {
   type ImageLayout,
 } from '@/lib/document-markdown';
 import { HighlightColorPicker } from '@/components/documents/highlight-color-picker';
+import { TextColorPicker } from '@/components/documents/text-color-picker';
+import { getTextColor, type TextColor } from '@/lib/text-colors';
+import { prepareEditorTextColors } from '@/lib/editor-text-colors';
 import { getHighlightColor, type HighlightColor } from '@/lib/highlight-colors';
 import { prepareEditorHighlights } from '@/lib/editor-highlights';
 import { imageAtDeletePosition } from '@/lib/editor-image-deletion';
@@ -246,6 +249,7 @@ export function NotionLikeEditor({
     if (contentChanged) {
       root.innerHTML = renderedHtml;
       prepareEditorHighlights(root);
+      prepareEditorTextColors(root);
       activeImageFigureRef.current = null;
       ensureTrailingParagraph(root);
       markdownRef.current = value;
@@ -295,6 +299,7 @@ export function NotionLikeEditor({
     if (!root) return;
 
     ensureTrailingParagraph(root);
+    prepareEditorTextColors(root);
     const nextMarkdown = editorHtmlToMarkdown(root);
     markdownRef.current = nextMarkdown;
     onChange(nextMarkdown);
@@ -672,6 +677,31 @@ export function NotionLikeEditor({
     }
     setError(null);
     document.execCommand('hiliteColor', false, getHighlightColor(color).background);
+    saveSelection();
+    emitChange();
+  }, [disabled, emitChange, saveSelection]);
+
+  const insertTextColor = useCallback((color: TextColor) => {
+    const root = editorRef.current;
+    if (!root || disabled) return;
+    const savedRange = selectionRef.current?.cloneRange();
+    root.focus();
+    const selection = window.getSelection();
+    if (savedRange && root.contains(savedRange.commonAncestorContainer) && selection) {
+      selection.removeAllRanges();
+      selection.addRange(savedRange);
+    }
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      setError('글자색을 바꿀 텍스트를 먼저 선택해 주세요.');
+      return;
+    }
+    setError(null);
+    document.execCommand('styleWithCSS', false, 'true');
+    try {
+      document.execCommand('foreColor', false, getTextColor(color).color);
+    } finally {
+      document.execCommand('styleWithCSS', false, 'false');
+    }
     saveSelection();
     emitChange();
   }, [disabled, emitChange, saveSelection]);
@@ -1095,6 +1125,7 @@ export function NotionLikeEditor({
           옆글쓰기
         </button>
         <HighlightColorPicker onBeforeOpen={saveSelection} onSelect={insertHighlight} disabled={disabled} />
+        <TextColorPicker onBeforeOpen={saveSelection} onSelect={insertTextColor} disabled={disabled} />
         <button
           type="button"
           onMouseDown={handleToolbarMouseDown}

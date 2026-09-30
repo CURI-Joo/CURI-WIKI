@@ -16,7 +16,7 @@
 ## Document Drive Shortcut
 
 - 작성·수정 화면의 제목 아래에 선택 입력 항목인 `Google Drive 링크`를 둡니다. Google Drive 폴더·파일 또는 Google Docs의 HTTPS 공유 링크를 붙여넣습니다.
-- 링크가 있는 글만 제목 아래에 Google Drive 로고와 `Google Drive 바로가기`를 표시하고 새 탭으로 엽니다. 비워 두면 읽기 화면에 해당 공간을 만들지 않습니다.
+- 링크가 있는 글만 작성자·날짜 정보 영역에서 날짜 오른쪽에 Google Drive 로고와 `Google Drive 바로가기`를 표시하고 새 탭으로 엽니다. 날짜와 버튼은 함께 배치하며 좁은 화면에서는 자연스럽게 줄바꿈합니다. 비워 두면 읽기 화면에 해당 공간을 만들지 않습니다.
 - 링크는 Markdown의 예약 헤더 `<!-- curi:drive-url URL -->`와 빈 줄로 저장합니다. 읽기·편집 본문과 요약에서는 분리하며 기존 원문 출처인 `source_url`은 보존합니다.
 - MCP `create_document` / `update_document`에서도 `drive_url`을 받습니다. 생략하면 유지하고, `null`이나 빈 문자열이면 제거합니다. 본문만 바꾸는 업데이트에서도 기존 링크를 보존합니다.
 

@@ -22,8 +22,8 @@ export function DocumentDriveLink({ url }: { url: string | null }) {
   return (
     <a href={safeUrl} target="_blank" rel="noopener noreferrer" data-document-drive-link
       aria-label="Google Drive 바로가기 (새 탭)"
-      className="mt-3 inline-flex max-w-full items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-curi-pink/40 hover:text-curi-pink focus-visible:outline-2 focus-visible:outline-curi-pink">
-      <GoogleDriveIcon className="h-4 w-4 shrink-0" />
+      className="inline-flex max-w-full items-center gap-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-curi-pink/40 hover:text-curi-pink focus-visible:outline-2 focus-visible:outline-curi-pink">
+      <GoogleDriveIcon className="h-3.5 w-3.5 shrink-0" />
       <span>Google Drive 바로가기</span>
       <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
     </a>

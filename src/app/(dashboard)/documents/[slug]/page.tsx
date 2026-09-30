@@ -141,18 +141,20 @@ export default function DocumentDetailPage() {
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-text-primary">{doc.title}</h1>
-          <DocumentDriveLink url={readDriveMetadata(doc.content_markdown).driveUrl} />
 
           {/* Meta */}
-          <div className="flex flex-wrap items-center gap-4 mt-4 text-xs text-text-muted">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-xs text-text-muted">
             <span className="flex items-center gap-1">
               <User className="w-3 h-3" />
               {author?.name ?? '작성자'}
             </span>
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              {formatDate(doc.updated_at)}
-            </span>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+              <span className="flex items-center gap-1 whitespace-nowrap">
+                <Calendar className="w-3 h-3" />
+                {formatDate(doc.updated_at)}
+              </span>
+              <DocumentDriveLink url={readDriveMetadata(doc.content_markdown).driveUrl} />
+            </div>
           </div>
         </div>
 

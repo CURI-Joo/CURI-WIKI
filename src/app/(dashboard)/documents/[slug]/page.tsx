@@ -21,6 +21,7 @@ import {
 import { normalizeCategoryId } from '@/lib/category-migration';
 import { DocumentDriveLink } from '@/components/documents/document-drive-link';
 import { readDriveMetadata } from '@/lib/document-drive';
+import { getDocumentHeadings } from '@/lib/document-markdown';
 
 export default function DocumentDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -62,15 +63,7 @@ export default function DocumentDetailPage() {
 
   const category = seedCategories.find((c) => c.id === normalizeCategoryId(doc.category_id));
 
-  // Generate TOC from markdown headings
-  const headings = doc.content_markdown
-    .split('\n')
-    .filter((line) => /^#{1,3}\s/.test(line))
-    .map((line) => {
-      const level = (line.match(/^#+/) || [''])[0].length;
-      const text = line.replace(/^#+\s*/, '');
-      return { level, text, id: text.toLowerCase().replace(/\s+/g, '-') };
-    });
+  const headings = getDocumentHeadings(doc.content_markdown);
 
   const handleCopyLink = async () => {
     const url = `${window.location.origin}/documents/${doc.slug}`;
@@ -212,6 +205,7 @@ export default function DocumentDetailPage() {
                 <a
                   key={i}
                   href={`#${h.id}`}
+                  title={h.text}
                   className="block text-xs text-text-muted hover:text-text-primary transition-colors truncate"
                   style={{ paddingLeft: `${(h.level - 1) * 12}px` }}
                 >

@@ -96,6 +96,7 @@ function renderImage(alt: string, src: string, title: string | null) {
 
 const highlightPattern = new RegExp(`^==([^=\\n]+)==(?:\\{(${HIGHLIGHT_COLOR_PATTERN})\\})?`);
 const textColorOpening = new RegExp(`^\\{\\{color:(${TEXT_COLOR_PATTERN})\\}\\}`);
+const headingId = (text: string) => text.toLowerCase().replace(/\s+/g, '-');
 
 function matchTextColor(source: string) {
   const opening = textColorOpening.exec(source);
@@ -200,7 +201,7 @@ const markdown = new Marked({
       return /^<br\s*\/?\s*>$/i.test(text) ? '<br>' : escapeHtml(text);
     },
     heading({ depth, text, tokens }) {
-      const id = escapeHtml(text.toLowerCase().replace(/\s+/g, '-'));
+      const id = escapeHtml(headingId(text));
       return `<h${depth} id="${id}">${this.parser.parseInline(tokens)}</h${depth}>\n`;
     },
     image({ text, href, title }) {
@@ -285,4 +286,32 @@ const markdown = new Marked({
 export function renderDocumentMarkdown(content: string): string {
   const html = markdown.parse(readDriveMetadata(content).body, { async: false });
   return html.replace(/(<img\b[^>]*?) loading="lazy"/, '$1 loading="eager" fetchpriority="high"');
+}
+
+function inlineText(tokens: Token[]): string {
+  return tokens.map(token => {
+    if (token.type === 'br') return ' ';
+    if ('tokens' in token && token.tokens) return inlineText(token.tokens);
+    if (!('text' in token)) return '';
+    return token.type === 'text' ? decodeHeadingEntities(token.text) : token.text;
+  }).join('');
+}
+
+function decodeHeadingEntities(text: string) {
+  const entities: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+  return text.replace(/&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (entity, name: string) => {
+    if (!name.startsWith('#')) return entities[name.toLowerCase()] ?? entity;
+    const value = name[1].toLowerCase() === 'x' ? parseInt(name.slice(2), 16) : Number(name.slice(1));
+    return value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : entity;
+  });
+}
+
+/** Use the reader's tokens for labels and anchors, excluding headings inside code. */
+export function getDocumentHeadings(content: string) {
+  const headings: { level: number; text: string; id: string }[] = [];
+  markdown.walkTokens(markdown.lexer(readDriveMetadata(content).body), token => {
+    if (token.type !== 'heading' || token.depth > 3) return;
+    headings.push({ level: token.depth, text: inlineText(token.tokens ?? []), id: headingId(token.text) });
+  });
+  return headings;
 }

@@ -223,6 +223,7 @@ export function NotionLikeEditor({
   const dragStateRef = useRef<{ figure: HTMLElement; startX: number; startLeft: number; moved: boolean } | null>(null);
   const resizeStateRef = useRef<{ figure: HTMLElement; mode: ImageResizeMode; startX: number; startY: number; startWidth: number; moved: boolean } | null>(null);
   const markdownRef = useRef<string | null>(null);
+  const localImageUrls = useRef(new Set<string>());
   const [uploadingKind, setUploadingKind] = useState<'image' | 'file' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [imageMenu, setImageMenu] = useState<{ figure: HTMLElement; x: number; y: number } | null>(null);
@@ -249,8 +250,11 @@ export function NotionLikeEditor({
   }, [renderedHtml, value]);
 
   useEffect(() => {
+    const urls = localImageUrls.current;
     return () => {
       document.body.style.userSelect = '';
+      urls.forEach(url => URL.revokeObjectURL(url));
+      urls.clear();
     };
   }, []);
 
@@ -774,9 +778,12 @@ export function NotionLikeEditor({
         figure.dataset.wrap = 'false';
 
         const image = document.createElement('img');
-        image.src = src;
+        const localUrl = URL.createObjectURL(file);
+        localImageUrls.current.add(localUrl);
+        image.src = localUrl;
+        image.dataset.originalSrc = src;
         image.alt = getImageAlt(file.name);
-        image.setAttribute('loading', 'lazy');
+        image.decoding = 'async';
 
         const caption = document.createElement('figcaption');
         caption.textContent = getImageAlt(file.name);

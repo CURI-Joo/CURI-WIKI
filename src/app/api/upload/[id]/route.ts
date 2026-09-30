@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isDemoMode } from '@/lib/demo-mode';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { imagePreviewKey } from '@/lib/image-preview-server';
 
 export async function GET(
   _request: NextRequest,
@@ -118,7 +119,7 @@ export async function DELETE(
     return NextResponse.json({ error: '삭제 권한이 없습니다.' }, { status: 403 });
   }
 
-  await supabaseAdmin.storage.from('wiki-media').remove([attachment.storage_key]);
+  await supabaseAdmin.storage.from('wiki-media').remove([attachment.storage_key, imagePreviewKey(attachment.storage_key)]);
 
   const { error: deleteError } = await supabaseAdmin
     .from('attachments')

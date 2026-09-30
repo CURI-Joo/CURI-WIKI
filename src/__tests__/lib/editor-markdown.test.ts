@@ -43,6 +43,18 @@ const sample = "**그대로** _유지_ [링크] | 표";
 `;
 
 describe('formatted document editing', () => {
+  it('displays lightweight previews but saves permanent originals, including local upload previews', () => {
+    const source = '![사진|right|w320|wrap](/api/upload/photo-1/file)\n\n설명';
+    const root = render(source);
+    const image = root.querySelector('img')!;
+    expect(image.getAttribute('src')).toBe('/api/upload/photo-1/file?preview=1');
+    image.src = 'blob:https://wiki.example/local-preview';
+    const saved = editorHtmlToMarkdown(root);
+    expect(saved).toContain('](/api/upload/photo-1/file)');
+    expect(saved).not.toContain('blob:');
+    expect(saved).not.toContain('?preview=');
+    expect(roundTrip(saved).querySelector('img')?.dataset.originalSrc).toBe('/api/upload/photo-1/file');
+  });
   it('renders the guide as headings, quotes, tables, lists and code', () => {
     const root = render(guide);
     expect(root.querySelector('h1')?.textContent).toBe('Claude로 CURI Wiki 글쓰기 가이드');

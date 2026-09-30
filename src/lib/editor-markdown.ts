@@ -1,6 +1,7 @@
 import TurndownService from 'turndown';
 import { getHighlightColor, highlightedMarkdown } from '@/lib/highlight-colors';
 import { normalizeHighlightsForMarkdown } from '@/lib/editor-highlights';
+import { originalImageUrl } from '@/lib/image-preview';
 import {
   clampImageOffset, clampImageWidth, DEFAULT_IMAGE_SIZE_LEVEL,
   IMAGE_WIDTH_BY_LEVEL, isSafeImageUrl, isSafeUrl, normalizeImageSize,
@@ -35,7 +36,7 @@ function fencedCode(node: HTMLElement) {
 
 function imageMarkdown(figure: HTMLElement) {
   const image = figure.querySelector('img');
-  const src = image?.getAttribute('src') ?? '';
+  const src = image ? originalImageUrl(image) : '';
   if (!isSafeImageUrl(src)) return '';
   const caption = figure.querySelector('figcaption')?.textContent ?? image?.alt ?? '';
   const options: string[] = [];

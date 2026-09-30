@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { isDemoMode } from '@/lib/demo-mode';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { createImagePreview, imagePreviewKey } from '@/lib/image-preview-server';
 
 import {
   ALLOWED_TYPES,
@@ -142,6 +143,17 @@ export async function POST(request: NextRequest) {
       { error: `첨부파일 기록 실패: ${insertError.message}` },
       { status: 500 }
     );
+  }
+
+  if (file.type.startsWith('image/')) {
+    after(async () => {
+      try {
+        const preview = await createImagePreview(buffer);
+        await supabaseAdmin.storage.from('wiki-media').upload(imagePreviewKey(storageKey), preview.bytes, {
+          contentType: preview.contentType, cacheControl: '31536000', upsert: false,
+        });
+      } catch { /* The original remains usable if its format cannot be optimized. */ }
+    });
   }
 
   return NextResponse.json({

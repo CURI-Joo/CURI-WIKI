@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { Bold, Italic, List, ListOrdered, Quote, Minus, ImagePlus, Link2, Loader2, Paperclip, Trash2 } from 'lucide-react';
+import { Bold, Italic, List, ListOrdered, Quote, Minus, ImagePlus, Video, Link2, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   ACCEPT_ATTRIBUTE,
   ALLOWED_IMAGE_TYPES,
+  ALLOWED_VIDEO_TYPES,
   ALLOWED_TYPES,
   MAX_IMAGE_SIZE,
   maxSizeFor,
@@ -24,6 +25,8 @@ import { getHighlightColor, type HighlightColor } from '@/lib/highlight-colors';
 import { prepareEditorHighlights } from '@/lib/editor-highlights';
 import { imageAtDeletePosition } from '@/lib/editor-image-deletion';
 import { editorHtmlToMarkdown } from '@/lib/editor-markdown';
+import { showVideoError, videoMarkdown } from '@/lib/document-video';
+import { uploadVideo } from '@/lib/upload-video';
 import { constrainImageOffset, getImageLayoutStyles } from '@/lib/image-layout';
 import { continueBelowImageText, createImageTextGroup, emptyParagraph, imageWritingContext, IMAGE_TEXT_SELECTOR, IMAGE_TEXT_BODY_SELECTOR } from '@/lib/editor-image-text';
 
@@ -86,6 +89,7 @@ type NotionLikeEditorProps = {
   documentId?: string;
   disabled?: boolean;
   placeholder?: string;
+  onUploadingChange?: (uploading: boolean) => void;
 };
 
 function getImageAlt(fileName: string) {
@@ -214,9 +218,11 @@ export function NotionLikeEditor({
   documentId,
   disabled,
   placeholder = '내용을 자유롭게 작성하세요...',
+  onUploadingChange,
 }: NotionLikeEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const selectionRef = useRef<Range | null>(null);
   const activeImageFigureRef = useRef<HTMLElement | null>(null);
@@ -224,7 +230,8 @@ export function NotionLikeEditor({
   const resizeStateRef = useRef<{ figure: HTMLElement; mode: ImageResizeMode; startX: number; startY: number; startWidth: number; moved: boolean } | null>(null);
   const markdownRef = useRef<string | null>(null);
   const localImageUrls = useRef(new Set<string>());
-  const [uploadingKind, setUploadingKind] = useState<'image' | 'file' | null>(null);
+  const [uploadingKind, setUploadingKind] = useState<'image' | 'video' | 'file' | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [imageMenu, setImageMenu] = useState<{ figure: HTMLElement; x: number; y: number } | null>(null);
   const [writingBesideImage, setWritingBesideImage] = useState(false);
@@ -246,6 +253,14 @@ export function NotionLikeEditor({
     root.querySelectorAll('figure[data-kind="image"]').forEach((figure) => {
       if (contentChanged) (figure as HTMLElement).dataset.selected = 'false';
       applyImageFigureStyle(figure as HTMLElement);
+    });
+    root.querySelectorAll('figure[data-kind="video"]').forEach(figure => {
+      if (figure.querySelector('[data-video-delete]')) return;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.videoDelete = 'true';
+      button.textContent = '영상 삭제';
+      figure.append(button);
     });
   }, [renderedHtml, value]);
 
@@ -724,7 +739,9 @@ export function NotionLikeEditor({
     emitChange();
   }, [continueBelowImage, disabled, emitChange, getCurrentImageFigure, saveSelection, setActiveImageFigure]);
 
-  const insertAsset = useCallback(async (file: File, kind: 'image' | 'file') => {
+  const insertAsset = useCallback(async (file: File, kind: 'image' | 'video' | 'file') => {
+    if (uploadingKind || disabled) return;
+    if (file.type.startsWith('video/')) kind = 'video';
     setError(null);
 
     if (kind === 'image' && !ALLOWED_IMAGE_TYPES.includes(file.type)) {
@@ -744,8 +761,24 @@ export function NotionLikeEditor({
     }
 
     setUploadingKind(kind);
+    setUploadProgress(0);
+    onUploadingChange?.(true);
 
     try {
+      if (kind === 'video') {
+        const payload = await uploadVideo(file, documentId, setUploadProgress);
+        const container = document.createElement('div');
+        container.innerHTML = markdownToEditorHtml(videoMarkdown(file.name, payload.markdown_url));
+        const figure = container.querySelector<HTMLElement>('figure[data-kind="video"]');
+        if (!figure) throw new Error('영상 재생 화면을 만들지 못했습니다.');
+        const video = figure.querySelector('video')!;
+        const localUrl = URL.createObjectURL(file);
+        localImageUrls.current.add(localUrl);
+        video.dataset.originalSrc = payload.markdown_url;
+        video.src = localUrl;
+        insertNodeAtCursor(figure, true);
+        return;
+      }
       const formData = new FormData();
       formData.append('file', file);
       if (documentId) {
@@ -812,10 +845,12 @@ export function NotionLikeEditor({
       setError(err instanceof Error ? err.message : '업로드에 실패했습니다.');
     } finally {
       setUploadingKind(null);
+      onUploadingChange?.(false);
       if (imageInputRef.current) imageInputRef.current.value = '';
+      if (videoInputRef.current) videoInputRef.current.value = '';
       if (attachmentInputRef.current) attachmentInputRef.current.value = '';
     }
-  }, [documentId, insertNodeAtCursor, setActiveImageFigure]);
+  }, [disabled, documentId, insertNodeAtCursor, onUploadingChange, setActiveImageFigure, uploadingKind]);
 
   const handleImageChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -836,10 +871,10 @@ export function NotionLikeEditor({
   const handlePaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     event.preventDefault();
     if (disabled) return;
-    const file = Array.from(event.clipboardData.files).find((item) => ALLOWED_IMAGE_TYPES.includes(item.type));
+    const file = Array.from(event.clipboardData.files).find((item) => ALLOWED_IMAGE_TYPES.includes(item.type) || ALLOWED_VIDEO_TYPES.includes(item.type));
     if (file) {
       saveSelection();
-      void insertAsset(file, 'image');
+      void insertAsset(file, file.type.startsWith('video/') ? 'video' : 'image');
       return;
     }
     const html = event.clipboardData.getData('text/html');
@@ -1044,6 +1079,11 @@ export function NotionLikeEditor({
           {uploadingKind === 'image' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
           이미지
         </button>
+        <button type="button" onMouseDown={handleToolbarMouseDown} onClick={() => videoInputRef.current?.click()}
+          disabled={disabled || uploadingKind !== null} title="MP4·WebM·MOV · 최대 50MB"
+          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border px-4 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50">
+          {uploadingKind === 'video' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />} 영상
+        </button>
         <button
           type="button"
           onMouseDown={handleToolbarMouseDown}
@@ -1088,20 +1128,32 @@ export function NotionLikeEditor({
         aria-multiline="true"
         aria-disabled={!!disabled}
         onInput={handleInput}
+        onErrorCapture={event => showVideoError(event.target)}
         onChange={handleInput}
         onPaste={handlePaste}
+        onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
+        onDrop={(event) => {
+          const file = Array.from(event.dataTransfer.files).find(file => ALLOWED_IMAGE_TYPES.includes(file.type) || ALLOWED_VIDEO_TYPES.includes(file.type));
+          if (!file) return;
+          event.preventDefault();
+          saveSelection();
+          void insertAsset(file, file.type.startsWith('video/') ? 'video' : 'image');
+        }}
         onKeyDown={handleKeyDown}
         onClick={(event) => {
-          if ((event.target as HTMLElement).closest('a')) event.preventDefault();
+          const deleteButton = (event.target as HTMLElement).closest('[data-video-delete]');
+          const videoFigure = deleteButton?.closest<HTMLElement>('figure[data-kind="video"]');
+          if (videoFigure) { event.preventDefault(); deleteImageFigure(videoFigure); }
+          if ((event.target as HTMLElement).closest('a') && !(event.target as HTMLElement).closest('figure[data-kind="video"]')) event.preventDefault();
         }}
         onMouseDown={handleEditorMouseDown}
         onContextMenu={(event) => {
-          const figure = (event.target as HTMLElement).closest('figure[data-kind="image"]') as HTMLElement | null;
+          const figure = (event.target as HTMLElement).closest('figure[data-kind="image"], figure[data-kind="video"]') as HTMLElement | null;
           if (!figure || disabled || (event.target as HTMLElement).closest('figcaption')) return;
           event.preventDefault();
           stopImagePointerAction(false);
           selectImageFigure(figure);
-          setActiveImageFigure(figure);
+          if (figure.dataset.kind === 'image') setActiveImageFigure(figure);
           setImageMenu({ figure, x: event.clientX, y: event.clientY });
         }}
         onMouseMove={handleEditorMouseMove}
@@ -1124,7 +1176,7 @@ export function NotionLikeEditor({
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          aria-label="이미지 메뉴" align="start" collisionPadding={8}
+          aria-label={imageMenu?.figure.dataset.kind === 'video' ? '영상 메뉴' : '이미지 메뉴'} align="start" collisionPadding={8}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onEscapeKeyDown={() => {
             if (imageMenu && editorRef.current?.contains(imageMenu.figure)) selectImageFigure(imageMenu.figure);
@@ -1134,13 +1186,16 @@ export function NotionLikeEditor({
             disabled={disabled} className="gap-2 text-error focus:text-error"
             onSelect={() => { if (imageMenu) deleteImageFigure(imageMenu.figure); }}
           >
-            <Trash2 className="h-4 w-4" /> 이미지 삭제
+            <Trash2 className="h-4 w-4" /> {imageMenu?.figure.dataset.kind === 'video' ? '영상 삭제' : '이미지 삭제'}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
       {error && <p className="text-xs text-error">{error}</p>}
+      {uploadingKind === 'video' && <p role="status" className="text-xs text-text-secondary">영상 업로드 중 {uploadProgress}%</p>}
 
+      <input ref={videoInputRef} type="file" accept={ALLOWED_VIDEO_TYPES.join(',')} className="hidden"
+        onChange={event => { const file = event.target.files?.[0]; if (file) void insertAsset(file, 'video'); }} />
       <input
         ref={imageInputRef}
         type="file"

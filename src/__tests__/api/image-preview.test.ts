@@ -94,6 +94,19 @@ describe('image preview delivery', () => {
     expect(mocks.preview).not.toHaveBeenCalled();
   });
 
+  it('allows embedded published videos without granting access to ordinary file links', async () => {
+    mocks.user = null;
+    mocks.attachment!.mime_type = 'video/mp4';
+    mocks.document = { category_id: 'cat-company', status: 'Published', content_markdown: '[시연](/api/upload/photo/file "curi:video")' };
+    expect((await request(false)).status).toBe(307);
+    expect(mocks.preview).not.toHaveBeenCalled();
+    mocks.document.content_markdown = '[시연](/api/upload/photo/file)';
+    expect((await request(false)).status).toBe(401);
+    mocks.document.content_markdown = '[시연](/api/upload/photo/file "curi:video")';
+    mocks.document.category_id = 'cat-secret';
+    expect((await request(false)).status).toBe(401);
+  });
+
   it('falls back to the original when optimization fails', async () => {
     mocks.preview.mockRejectedValue(new Error('unsupported format'));
     expect((await request()).headers.get('location')).toBe('https://storage.example/original');

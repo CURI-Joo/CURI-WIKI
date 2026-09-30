@@ -3,6 +3,7 @@ import { getHighlightColor, HIGHLIGHT_COLOR_PATTERN } from '@/lib/highlight-colo
 import { getImageLayoutStyles, type ImageLayout } from '@/lib/image-layout';
 import { readDriveMetadata } from '@/lib/document-drive';
 import { imagePreviewUrl } from '@/lib/image-preview';
+import { isSafeVideoUrl, VIDEO_LINK_TITLE } from '@/lib/document-video';
 
 export type { ImageLayout } from '@/lib/image-layout';
 export type ImageSizeLevel = 1 | 2 | 3 | 4;
@@ -136,7 +137,8 @@ function groupImageText(tokens: Token[]): Token[] {
       while (end < tokens.length) {
         const next = tokens[end];
         if (!['space', 'paragraph', 'list', 'blockquote'].includes(next.type)
-          || 'tokens' in next && next.tokens?.some((part: Token) => part.type === 'image')) break;
+          || 'tokens' in next && next.tokens?.some((part: Token) => part.type === 'image'
+            || part.type === 'link' && part.title === VIDEO_LINK_TITLE)) break;
         end++;
       }
       result.push({ type: 'imageText', raw: tokens.slice(index, end).map(part => part.raw).join(''),
@@ -178,6 +180,11 @@ const markdown = new Marked({
         .replace(/<p>\s*<\/p>/g, '');
     },
     link({ href, title, tokens, text }) {
+      if (title === VIDEO_LINK_TITLE && isSafeVideoUrl(href)) {
+        const src = escapeHtml(href);
+        const caption = escapeHtml(text);
+        return `<figure data-kind="video" contenteditable="false"><video src="${src}" controls playsinline preload="metadata" aria-label="${caption}"></video><figcaption><span data-video-caption>${caption}</span> · <a href="${src}" target="_blank" rel="noopener noreferrer">원본 열기</a></figcaption><p data-video-error hidden>영상을 재생할 수 없습니다. 원본을 열어 확인하거나 MP4로 다시 업로드해 주세요.</p></figure>`;
+      }
       const label = this.parser.parseInline(tokens);
       if (!isSafeUrl(href)) return label;
       const attachment = text.startsWith('📎');

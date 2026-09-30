@@ -70,6 +70,7 @@ export default function NewDocumentPage() {
   const [content, setContent] = useState('');
   const [driveUrl, setDriveUrl] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploadingAsset, setUploadingAsset] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editorMode, setEditorMode] = useState<'simple' | 'markdown'>('simple');
   const [categories, setCategories] = useState<CategoryOption[]>(() => seedCategoryOptions());
@@ -160,6 +161,7 @@ export default function NewDocumentPage() {
   if (!profile) return null;
 
   const handleSave = async () => {
+    if (uploadingAsset) return;
     if (!title.trim()) return;
     if (profile.role !== 'admin' && isSecretCategoryId(categoryId)) {
       alert('Secret 카테고리는 관리자만 선택할 수 있습니다.');
@@ -399,7 +401,7 @@ export default function NewDocumentPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setEditorMode('simple')}
+            disabled={uploadingAsset} onClick={() => setEditorMode('simple')}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               editorMode === 'simple' ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'
             }`}
@@ -408,7 +410,7 @@ export default function NewDocumentPage() {
           </button>
           <button
             type="button"
-            onClick={() => setEditorMode('markdown')}
+            disabled={uploadingAsset} onClick={() => setEditorMode('markdown')}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               editorMode === 'markdown' ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'
             }`}
@@ -422,6 +424,7 @@ export default function NewDocumentPage() {
             content={content}
             onContentChange={setContent}
             disabled={saving}
+            onUploadingChange={setUploadingAsset}
           />
         )}
       </div>
@@ -435,6 +438,7 @@ export default function NewDocumentPage() {
             value={content}
             onChange={setContent}
             disabled={saving}
+            onUploadingChange={setUploadingAsset}
             placeholder="내용을 자유롭게 작성하세요..."
           />
         </>
@@ -466,11 +470,11 @@ export default function NewDocumentPage() {
           </button>
           <button
             onClick={handleSave}
-            disabled={!title.trim() || saving}
+            disabled={!title.trim() || saving || uploadingAsset}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-curi-pink hover:bg-curi-pink-hover text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save className="w-3.5 h-3.5" />
-            {saving ? '저장 중...' : '저장'}
+            {saving ? '저장 중...' : uploadingAsset ? '업로드 중...' : '저장'}
           </button>
         </div>
       </div>

@@ -3,7 +3,7 @@ import { isDemoMode } from '@/lib/demo-mode';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { loadImagePreview, PRIVATE_IMAGE_CACHE } from '@/lib/image-preview-server';
-import { isPublicDocumentImage } from '@/lib/public-document-image';
+import { isPublicDocumentMedia } from '@/lib/public-document-image';
 
 type AttachmentDocument = { category_id: string | null; status: string; content_markdown: string };
 
@@ -29,7 +29,8 @@ export async function GET(
   }
 
   let document: AttachmentDocument | null = null;
-  let publicImage = false;
+  let publicMedia = false;
+  const mediaKind = attachment.mime_type.startsWith('image/') ? 'image' : attachment.mime_type.startsWith('video/') ? 'video' : null;
   if (attachment.document_id) {
     const { data: documentData, error: documentError } = await supabaseAdmin
       .from('documents')
@@ -43,16 +44,16 @@ export async function GET(
       return NextResponse.json({ error: '문서를 찾을 수 없습니다.' }, { status: 404 });
     }
 
-    publicImage = attachment.mime_type.startsWith('image/') && isPublicDocumentImage(document, id, request.nextUrl.origin);
-  } else if (attachment.mime_type.startsWith('image/')) {
-    // Images uploaded while composing a new document do not have a parent ID yet.
+    publicMedia = !!mediaKind && isPublicDocumentMedia(document, id, request.nextUrl.origin, mediaKind);
+  } else if (mediaKind) {
+    // Media uploaded while composing a new document do not have a parent ID yet.
     const { data: candidates, error: candidateError } = await supabaseAdmin.from('documents')
       .select('category_id, status, content_markdown').eq('status', 'Published').neq('category_id', 'cat-secret')
       .ilike('content_markdown', `%/api/upload/${id}/file%`).limit(20);
-    publicImage = !candidateError && (candidates ?? []).some(candidate => isPublicDocumentImage(candidate, id, request.nextUrl.origin));
+    publicMedia = !candidateError && (candidates ?? []).some(candidate => isPublicDocumentMedia(candidate, id, request.nextUrl.origin, mediaKind));
   }
 
-  if (!publicImage) {
+  if (!publicMedia) {
     const supabase = await createServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });

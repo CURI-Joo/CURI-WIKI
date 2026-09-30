@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { isSafeImageUrl, renderDocumentMarkdown } from '@/lib/document-markdown';
 import { originalImageUrl } from '@/lib/image-preview';
+import { showVideoError } from '@/lib/document-video';
 import { ImageViewer, type ViewedImage } from '@/components/documents/image-viewer';
 
 export function MarkdownRenderer({ content }: { content: string }) {
@@ -25,6 +26,7 @@ export function MarkdownRenderer({ content }: { content: string }) {
   };
   return <>
     <div ref={root} className="prose-curi" dangerouslySetInnerHTML={{ __html: html }}
+      onErrorCapture={event => showVideoError(event.target)}
       onClick={event => openImage(event.target)}
       onKeyDown={event => {
         if (event.target instanceof HTMLImageElement && ['Enter', ' '].includes(event.key)) {

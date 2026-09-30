@@ -112,6 +112,11 @@ body {
 .prose-curi figure img { display: block; width: 100%; height: auto; max-height: 560px; object-fit: contain; border: 1px solid var(--border); border-radius: 8px; background: var(--background); }
 .prose-curi figcaption { margin-top: 6px; font-size: 12px; color: var(--text-muted); text-align: center; }
 .prose-curi figcaption:empty { display: none; }
+.prose-curi figure[data-kind="video"] { position: relative; clear: both; width: 100%; max-width: 100%; margin: 24px 0; }
+.prose-curi figure video { display: block; width: 100%; max-height: 70vh; min-height: 160px; border: 1px solid var(--border); border-radius: 8px; background: #18181b; }
+.prose-curi [data-video-delete] { display: none; }
+.notion-like-editor [data-video-delete] { display: block; position: absolute; top: 8px; right: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-primary); font-size: 12px; cursor: pointer; }
+.notion-like-editor [data-video-delete]:hover { color: var(--error); }
 .prose-curi [data-kind="image-text"] { display: grid; grid-template-columns: min(50%, var(--image-width, 360px)) minmax(0, 1fr); gap: 24px; align-items: start; clear: both; margin: 16px 0; }
 .prose-curi [data-kind="image-text"] > figure[data-kind="image"] { margin-top: 0; margin-bottom: 0; min-width: 0; }
 .prose-curi [data-kind="image-text-body"] { min-width: 0; display: flow-root; }

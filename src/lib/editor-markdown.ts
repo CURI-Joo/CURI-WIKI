@@ -2,6 +2,7 @@ import TurndownService from 'turndown';
 import { getHighlightColor, highlightedMarkdown } from '@/lib/highlight-colors';
 import { normalizeHighlightsForMarkdown } from '@/lib/editor-highlights';
 import { originalImageUrl } from '@/lib/image-preview';
+import { isSafeVideoUrl, videoMarkdown } from '@/lib/document-video';
 import {
   clampImageOffset, clampImageWidth, DEFAULT_IMAGE_SIZE_LEVEL,
   IMAGE_WIDTH_BY_LEVEL, isSafeImageUrl, isSafeUrl, normalizeImageSize,
@@ -78,6 +79,17 @@ converter.addRule('strikethrough', {
 converter.addRule('wikiImage', {
   filter: (node) => node.tagName === 'FIGURE' && node.dataset.kind === 'image',
   replacement: (_content, node) => imageMarkdown(node),
+});
+
+converter.addRule('wikiVideo', {
+  filter: (node) => node.tagName === 'FIGURE' && node.dataset.kind === 'video',
+  replacement(_content, node) {
+    const video = node.querySelector('video');
+    const src = video?.dataset.originalSrc || video?.getAttribute('src') || '';
+    if (!isSafeVideoUrl(src)) return '';
+    const label = node.querySelector('[data-video-caption]')?.textContent || video?.getAttribute('aria-label') || '영상';
+    return `\n\n${videoMarkdown(label, src)}\n\n`;
+  },
 });
 
 converter.addRule('imageText', {

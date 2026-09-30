@@ -1,5 +1,5 @@
 const isImageFigure = (node: Node | undefined | null): node is HTMLElement =>
-  node instanceof HTMLElement && node.matches('figure[data-kind="image"]');
+  node instanceof HTMLElement && node.matches('figure[data-kind="image"], figure[data-kind="video"]');
 
 /** Find an explicitly selected image, or the image directly beside an empty caret boundary. */
 export function imageAtDeletePosition(root: HTMLElement, range: Range, backward: boolean): HTMLElement | null {
@@ -13,7 +13,7 @@ export function imageAtDeletePosition(root: HTMLElement, range: Range, backward:
   let node: Node = range.startContainer;
   const element = node instanceof Element ? node : node.parentElement;
   // Captions remain ordinary editable text, including at their start/end.
-  if (element?.closest('figure[data-kind="image"]')) return null;
+  if (element?.closest('figure[data-kind="image"], figure[data-kind="video"]')) return null;
   let offset = range.startOffset;
   for (;;) {
     if (node.nodeType === Node.TEXT_NODE) {

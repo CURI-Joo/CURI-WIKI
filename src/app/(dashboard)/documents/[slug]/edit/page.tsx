@@ -113,6 +113,7 @@ function EditForm({
   const [content, setContent] = useState(() => readDriveMetadata(doc.content_markdown).body);
   const [driveUrl, setDriveUrl] = useState(() => readDriveMetadata(doc.content_markdown).driveUrl ?? '');
   const [saving, setSaving] = useState(false);
+  const [uploadingAsset, setUploadingAsset] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editorMode, setEditorMode] = useState<'simple' | 'markdown'>('simple');
   const [categories, setCategories] = useState<CategoryOption[]>(() => seedCategoryOptions());
@@ -198,6 +199,7 @@ function EditForm({
   }, [categoryId]);
 
   const handleSave = async () => {
+    if (uploadingAsset) return;
     if (!isAdmin && isSecretCategoryId(categoryId)) {
       alert('Secret 카테고리는 관리자만 선택할 수 있습니다.');
       return;
@@ -430,10 +432,10 @@ function EditForm({
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setEditorMode('simple')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${editorMode === 'simple' ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>
+          <button type="button" disabled={uploadingAsset} onClick={() => setEditorMode('simple')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${editorMode === 'simple' ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>
             간편 편집
           </button>
-          <button type="button" onClick={() => setEditorMode('markdown')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${editorMode === 'markdown' ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>
+          <button type="button" disabled={uploadingAsset} onClick={() => setEditorMode('markdown')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${editorMode === 'markdown' ? 'bg-curi-pink-soft text-curi-pink' : 'text-text-muted hover:text-text-secondary'}`}>
             Markdown
           </button>
         </div>
@@ -444,6 +446,7 @@ function EditForm({
             onContentChange={setContent}
             documentId={doc.id}
             disabled={saving}
+            onUploadingChange={setUploadingAsset}
           />
         )}
       </div>
@@ -458,6 +461,7 @@ function EditForm({
             onChange={setContent}
             documentId={doc.id}
             disabled={saving}
+            onUploadingChange={setUploadingAsset}
             placeholder="내용을 자유롭게 작성하세요..."
           />
         </>
@@ -479,8 +483,8 @@ function EditForm({
         <span className="text-xs text-text-muted">{saving ? '저장 중...' : saved ? '저장 완료' : ''}</span>
         <div className="flex items-center gap-2">
           <button onClick={() => router.back()} className="px-4 py-2 rounded-lg border border-border text-text-secondary text-sm hover:bg-surface-elevated transition-colors">취소</button>
-          <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-curi-pink hover:bg-curi-pink-hover text-white text-sm font-medium transition-colors disabled:opacity-50">
-            <Save className="w-3.5 h-3.5" />{saving ? '저장 중...' : '저장'}
+          <button onClick={handleSave} disabled={saving || uploadingAsset} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-curi-pink hover:bg-curi-pink-hover text-white text-sm font-medium transition-colors disabled:opacity-50">
+            <Save className="w-3.5 h-3.5" />{saving ? '저장 중...' : uploadingAsset ? '업로드 중...' : '저장'}
           </button>
         </div>
       </div>

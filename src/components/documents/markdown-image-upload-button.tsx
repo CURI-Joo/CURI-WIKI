@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from 'react';
-import { ImagePlus, Link2, Loader2, Paperclip } from 'lucide-react';
+import { ImagePlus, Video, Link2, Loader2, Paperclip } from 'lucide-react';
 import {
   ACCEPT_ATTRIBUTE,
   ALLOWED_IMAGE_TYPES,
+  ALLOWED_VIDEO_TYPES,
   ALLOWED_TYPES,
   MAX_IMAGE_SIZE,
   maxSizeFor,
@@ -13,6 +14,8 @@ import {
 import { HighlightColorPicker } from '@/components/documents/highlight-color-picker';
 import { highlightedMarkdown, type HighlightColor } from '@/lib/highlight-colors';
 import { formatFileSize } from '@/lib/utils';
+import { uploadVideo } from '@/lib/upload-video';
+import { videoMarkdown } from '@/lib/document-video';
 
 function getImageAlt(fileName: string) {
   return fileName.replace(/\.[^.]+$/, '').trim() || 'image';
@@ -54,6 +57,7 @@ interface MarkdownImageUploadButtonProps {
   onContentChange: Dispatch<SetStateAction<string>>;
   documentId?: string;
   disabled?: boolean;
+  onUploadingChange?: (uploading: boolean) => void;
 }
 
 export function MarkdownImageUploadButton({
@@ -62,10 +66,13 @@ export function MarkdownImageUploadButton({
   onContentChange,
   documentId,
   disabled,
+  onUploadingChange,
 }: MarkdownImageUploadButtonProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingKind, setUploadingKind] = useState<'image' | 'file' | null>(null);
+  const [uploadingKind, setUploadingKind] = useState<'image' | 'video' | 'file' | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const insertLink = useCallback((rawUrl?: string | null) => {
@@ -103,7 +110,9 @@ export function MarkdownImageUploadButton({
     });
   }, [content, onContentChange, textareaRef]);
 
-  const insertAsset = useCallback(async (file: File, kind: 'image' | 'file') => {
+  const insertAsset = useCallback(async (file: File, kind: 'image' | 'video' | 'file') => {
+    if (disabled || uploadingKind) return;
+    if (file.type.startsWith('video/')) kind = 'video';
     setError(null);
     const selectionStart = textareaRef.current?.selectionStart ?? content.length;
     const selectionEnd = textareaRef.current?.selectionEnd ?? content.length;
@@ -126,6 +135,8 @@ export function MarkdownImageUploadButton({
     }
 
     setUploadingKind(kind);
+    setUploadProgress(0);
+    onUploadingChange?.(true);
 
     try {
       const formData = new FormData();
@@ -134,20 +145,22 @@ export function MarkdownImageUploadButton({
         formData.append('document_id', documentId);
       }
 
-      const response = await fetch('/api/upload', {
+      const response = kind === 'video' ? null : await fetch('/api/upload', {
         method: 'POST',
         credentials: 'include',
         body: formData,
       });
-      const payload = await response.json();
+      const payload = kind === 'video' ? await uploadVideo(file, documentId, setUploadProgress) : await response!.json();
 
-      if (!response.ok) {
+      if (response && !response.ok) {
         throw new Error(payload.error || '이미지 업로드에 실패했습니다.');
       }
 
       let markdown = '';
 
-      if (kind === 'image') {
+      if (kind === 'video') {
+        markdown = videoMarkdown(file.name, payload.markdown_url);
+      } else if (kind === 'image') {
         const imageUrl =
           payload.markdown_url ||
           (payload.attachment?.id ? `/api/upload/${payload.attachment.id}/file` : null);
@@ -187,6 +200,8 @@ export function MarkdownImageUploadButton({
       setError(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
     } finally {
       setUploadingKind(null);
+      onUploadingChange?.(false);
+      if (videoInputRef.current) videoInputRef.current.value = '';
       if (imageInputRef.current) {
         imageInputRef.current.value = '';
       }
@@ -194,7 +209,7 @@ export function MarkdownImageUploadButton({
         attachmentInputRef.current.value = '';
       }
     }
-  }, [content.length, documentId, onContentChange, textareaRef]);
+  }, [content.length, disabled, documentId, onContentChange, onUploadingChange, textareaRef, uploadingKind]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -204,20 +219,20 @@ export function MarkdownImageUploadButton({
       if (uploadingKind) return;
 
       const items = Array.from(event.clipboardData?.items ?? []);
-      const imageItem = items.find((item) => item.type.startsWith('image/'));
+      const imageItem = items.find((item) => /^(image|video)\//.test(item.type));
       const file = imageItem?.getAsFile();
 
       if (!file) return;
 
       event.preventDefault();
-      void insertAsset(file, 'image');
+      void insertAsset(file, file.type.startsWith('video/') ? 'video' : 'image');
     };
 
     const handleDrop = (event: DragEvent) => {
       if (uploadingKind) return;
 
       const files = Array.from(event.dataTransfer?.files ?? []);
-      const image = files.find((file) => file.type.startsWith('image/'));
+      const image = files.find((file) => /^(image|video)\//.test(file.type));
 
       if (!image) return;
 
@@ -226,12 +241,11 @@ export function MarkdownImageUploadButton({
       const nextCursor = textarea.selectionStart ?? content.length;
       textarea.focus();
       textarea.setSelectionRange(nextCursor, nextCursor);
-      void insertAsset(image, 'image');
+      void insertAsset(image, image.type.startsWith('video/') ? 'video' : 'image');
     };
 
     const handleDragOver = (event: DragEvent) => {
-      const files = Array.from(event.dataTransfer?.files ?? []);
-      if (!files.some((file) => file.type.startsWith('image/'))) {
+      if (!event.dataTransfer?.types.includes('Files')) {
         return;
       }
       event.preventDefault();
@@ -323,6 +337,11 @@ export function MarkdownImageUploadButton({
         )}
         이미지
       </button>
+      <button type="button" onClick={() => videoInputRef.current?.click()} disabled={disabled || uploadingKind !== null}
+        aria-label="영상 삽입" title="MP4·WebM·MOV · 최대 50MB"
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-elevated hover:text-text-primary disabled:pointer-events-none disabled:opacity-50">
+        {uploadingKind === 'video' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Video className="h-3.5 w-3.5" />} 영상
+      </button>
       <HighlightColorPicker
         onSelect={handleInsertHighlight}
         disabled={disabled || uploadingKind !== null}
@@ -359,6 +378,9 @@ export function MarkdownImageUploadButton({
           {error}
         </span>
       )}
+      {uploadingKind === 'video' && <span role="status" className="text-xs text-text-secondary">영상 업로드 중 {uploadProgress}%</span>}
+      <input ref={videoInputRef} type="file" accept={ALLOWED_VIDEO_TYPES.join(',')} className="hidden"
+        onChange={event => { const file = event.target.files?.[0]; if (file) void insertAsset(file, 'video'); }} />
       <input
         ref={imageInputRef}
         type="file"

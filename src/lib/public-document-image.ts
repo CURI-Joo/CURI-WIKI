@@ -1,13 +1,20 @@
 import { marked } from 'marked';
+import { VIDEO_LINK_TITLE } from '@/lib/document-video';
 
 type ImageDocument = { status?: string; category_id?: string | null; content_markdown?: string };
 
 /** Only images actually embedded in a publicly readable document can bypass sign-in. */
 export function isPublicDocumentImage(document: ImageDocument | null, id: string, origin: string) {
+  return isPublicDocumentMedia(document, id, origin, 'image');
+}
+
+/** Video links use an explicit marker, so ordinary attachment links stay private. */
+export function isPublicDocumentMedia(document: ImageDocument | null, id: string, origin: string, kind: 'image' | 'video') {
   if (!document || document.status !== 'Published' || !document.category_id || document.category_id === 'cat-secret') return false;
   let found = false;
   marked.walkTokens(marked.lexer(document.content_markdown ?? ''), token => {
-    if (token.type !== 'image') return;
+    if (kind === 'image' ? token.type !== 'image' : token.type !== 'link' || token.title !== VIDEO_LINK_TITLE) return;
+    if (token.type !== 'image' && token.type !== 'link') return;
     try {
       const url = new URL(token.href, origin);
       if (url.origin === origin && url.pathname === `/api/upload/${id}/file`) found = true;

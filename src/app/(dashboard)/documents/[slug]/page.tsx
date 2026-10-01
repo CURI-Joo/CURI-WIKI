@@ -22,6 +22,7 @@ import { normalizeCategoryId } from '@/lib/category-migration';
 import { DocumentDriveLink } from '@/components/documents/document-drive-link';
 import { readDriveMetadata } from '@/lib/document-drive';
 import { getDocumentHeadings } from '@/lib/document-markdown';
+import { canEditDocument } from '@/lib/permissions';
 
 export default function DocumentDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -84,7 +85,8 @@ export default function DocumentDetailPage() {
     }
   };
 
-  const canDelete = Boolean(profile && (profile.role === 'admin' || doc.owner_id === profile.id));
+  const canEdit = canEditDocument(profile, doc);
+  const canDelete = Boolean(profile?.status === 'approved' && (profile.role === 'admin' || doc.owner_id === profile.id));
 
   const handleDelete = async () => {
     if (!canDelete || deleting || !profile) return;
@@ -153,13 +155,13 @@ export default function DocumentDetailPage() {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          <Link
-            href={profile ? `/documents/${doc.slug}/edit` : '/login'}
+          {canEdit && <Link
+            href={`/documents/${doc.slug}/edit`}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-curi-pink hover:bg-curi-pink-hover text-white text-sm font-medium transition-colors"
           >
             <Edit3 className="w-3.5 h-3.5" />
-            {profile ? '내용 수정' : '로그인 후 수정'}
-          </Link>
+            내용 수정
+          </Link>}
           {canDelete && (
             <button
               type="button"

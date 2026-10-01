@@ -10,7 +10,7 @@ import { buildSummaryFromMarkdown } from '@/lib/plain-editor';
 import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import type { Document } from '@/types';
-import { isSecretCategoryId } from '@/lib/permissions';
+import { canEditDocument, isSecretCategoryId } from '@/lib/permissions';
 import { normalizeCategoryId } from '@/lib/category-migration';
 import { createClient } from '@/lib/supabase/client';
 import { slugify } from '@/lib/utils';
@@ -85,11 +85,15 @@ export default function EditDocumentPage() {
     );
   }
 
-  if (isSecretCategoryId(doc.category_id) && profile.role !== 'admin') {
+  if (!canEditDocument(profile, doc)) {
     return (
       <div className="max-w-4xl mx-auto text-center py-20">
         <p className="text-text-secondary text-lg mb-2">접근 권한이 없습니다</p>
-        <p className="text-sm text-text-muted">Secret 문서는 관리자만 수정할 수 있습니다.</p>
+        <p className="text-sm text-text-muted">
+          {isSecretCategoryId(doc.category_id)
+            ? 'Secret 문서는 승인된 관리자만 수정할 수 있습니다.'
+            : '승인된 작성자 또는 관리자만 수정할 수 있습니다.'}
+        </p>
       </div>
     );
   }

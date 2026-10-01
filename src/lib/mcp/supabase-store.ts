@@ -1,5 +1,6 @@
 import type { AuthCode, OAuthClient, OAuthStore, TokenRecord } from "./oauth/types";
 import { mergeDriveMetadata, readDriveMetadata } from "../document-drive";
+import { requireDocumentEditor } from "./wiki/permissions";
 import type {
   CreateDocumentInput,
   WikiCategory,
@@ -115,6 +116,7 @@ export function createSupabaseWikiStore(db: SupabaseLike, schema: WikiSchema = {
     tags: Array.isArray(row.tags) ? row.tags : [],
     source_url: row.source_url ?? null,
     author_id: row.author_id ?? row.created_by ?? "",
+    owner_id: row.owner_id ?? null,
     updated_at: row.updated_at,
   });
 
@@ -145,29 +147,42 @@ export function createSupabaseWikiStore(db: SupabaseLike, schema: WikiSchema = {
 
   const isUuid = (value: string): boolean => UUID_RE.test(value);
 
+  const getUser = async (userId: string): Promise<WikiUser | null> => {
+    const { data, error } = await db.auth.admin.getUserById(userId);
+    if (error || !data?.user) return null;
+    const user = data.user;
+
+    // Approval lives in the app's own profile row, not in auth.users.
+    const { data: profile } = await db
+      .from(profiles)
+      .select("name, status, role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    return {
+      id: user.id,
+      email: user.email ?? null,
+      display_name: profile?.name ?? null,
+      approved: profile?.status === "approved",
+      role: profile?.role,
+    };
+  };
+
+  const getEditableDocument = async (idOrSlug: string, userId: string) => {
+    const lookupColumn = isUuid(idOrSlug) ? "id" : "slug";
+    const user = await getUser(userId);
+    const { data: document, error } = await db.from(documents)
+      .select("id, owner_id, category_id, content_markdown").eq(lookupColumn, idOrSlug).maybeSingle();
+    if (error || !document) throw new Error(`문서 조회 실패: ${error?.message ?? "문서를 찾을 수 없습니다."}`);
+    requireDocumentEditor(user, document);
+    return { document, user, lookupColumn };
+  };
+
   return {
-    async getUser(userId: string): Promise<WikiUser | null> {
-      const { data, error } = await db.auth.admin.getUserById(userId);
-      if (error || !data?.user) return null;
-      const user = data.user;
-
-      // Approval lives in the app's own profile row, not in auth.users.
-      const { data: profile } = await db
-        .from(profiles)
-        .select("name, status, role")
-        .eq("id", userId)
-        .maybeSingle();
-
-      return {
-        id: user.id,
-        email: user.email ?? null,
-        display_name: profile?.name ?? null,
-        approved: profile?.status === "approved",
-        role: profile?.role,
-      };
-    },
+    getUser,
 
     async uploadImage(input, uploaderId) {
+      await getEditableDocument(input.document_id, uploaderId);
       if (!db.storage) throw new Error('이미지 저장소가 설정되지 않았습니다.');
       const storageKey = `${uploaderId}/${crypto.randomUUID()}.${input.file_name.split('.').pop()}`;
       const bucket = db.storage.from('wiki-media');
@@ -249,8 +264,12 @@ export function createSupabaseWikiStore(db: SupabaseLike, schema: WikiSchema = {
     },
 
     async updateDocument(idOrSlug: string, patch: Partial<CreateDocumentInput>, editorId: string) {
-      const { drive_url, ...storedPatch } = patch;
-      const lookupColumn = isUuid(idOrSlug) ? "id" : "slug";
+      const { document: previous, user, lookupColumn } = await getEditableDocument(idOrSlug, editorId);
+      const { drive_url, category_slug, title, slug, summary, content_markdown, status, tags, source_url } = patch;
+      // Never let arbitrary MCP arguments write ownership or audit columns.
+      const storedPatch = Object.fromEntries(Object.entries({
+        title, slug, summary, content_markdown, status, tags, source_url,
+      }).filter(([, value]) => value !== undefined));
       const updatePayload: Record<string, unknown> = {
         ...storedPatch,
         updated_by: editorId,
@@ -258,26 +277,27 @@ export function createSupabaseWikiStore(db: SupabaseLike, schema: WikiSchema = {
       };
 
       if (patch.content_markdown !== undefined || drive_url !== undefined) {
-        const { data: previous, error } = await db.from(documents)
-          .select("content_markdown").eq(lookupColumn, idOrSlug).maybeSingle();
-        if (error || !previous) throw new Error(`문서 조회 실패: ${error?.message ?? "문서를 찾을 수 없습니다."}`);
         const previousContent = previous.content_markdown ?? "";
         updatePayload.content_markdown = mergeDriveMetadata(
           patch.content_markdown ?? previousContent, previousContent, drive_url,
         );
       }
 
-      if (patch.category_slug) {
-        updatePayload.category_id = await getCategoryIdBySlug(patch.category_slug);
-        delete updatePayload.category_slug;
+      if (category_slug !== undefined) {
+        const categoryId = await getCategoryIdBySlug(category_slug);
+        requireDocumentEditor(user, previous, categoryId);
+        updatePayload.category_id = categoryId;
       }
 
-      const { data, error } = await db
+      let update = db
         .from(documents)
         .update(updatePayload)
-        .eq(lookupColumn, idOrSlug)
-        .select("*")
-        .single();
+        .eq(lookupColumn, idOrSlug);
+      if (user?.role !== "admin") {
+        // Recheck the owner/category in the write itself if they changed after lookup.
+        update = update.eq("owner_id", editorId).eq("category_id", previous.category_id);
+      }
+      const { data, error } = await update.select("*").single();
       if (error) throw new Error(`문서 수정 실패: ${error.message}`);
       const slugMap = await getCategorySlugMap();
       return toWikiDocument(data as any, slugMap.get((data as any).category_id) || "");

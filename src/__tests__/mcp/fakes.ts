@@ -80,6 +80,7 @@ export function memoryWikiStore(users: WikiUser[]): WikiStore & { docs: WikiDocu
     tags: row.tags,
     source_url: row.source_url,
     author_id: row.author_id,
+    owner_id: row.author_id,
     updated_at: row.updated_at,
   });
 

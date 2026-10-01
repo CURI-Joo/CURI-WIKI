@@ -3,6 +3,7 @@ import { fetchSource } from "./source";
 import { readImageFile, requireUploadedImages } from "./images";
 import type { WikiStore } from "./types";
 import { normalizeDriveUrl } from "../../document-drive";
+import { requireDocumentEditor } from "./permissions";
 
 export interface ToolContext {
   store: WikiStore;
@@ -154,9 +155,7 @@ export const tools: ToolDefinition[] = [
       const user = await requireApproved(ctx);
       const doc = await ctx.store.getDocument(String(args.document_id_or_slug));
       if (!doc) throw new ToolError("사진을 첨부할 문서를 찾을 수 없습니다. 먼저 Draft 문서를 만드세요.");
-      if (doc.category_slug === "secret" && user.role !== "admin") {
-        throw new ToolError("Secret 문서에는 관리자만 첨부할 수 있습니다.");
-      }
+      requireDocumentEditor(user, { owner_id: doc.owner_id, category_id: `cat-${doc.category_slug}` });
       const file = await readImageFile(args);
       const attachment = await ctx.store.uploadImage({ ...file, document_id: doc.id }, user.id);
       return { status: "uploaded", ...attachment, file_name: file.file_name, file_size: file.bytes.byteLength };
@@ -215,7 +214,7 @@ export const tools: ToolDefinition[] = [
   {
     name: "update_document",
     description:
-      "Update an existing CURI Wiki document as the connected account. Use when search_documents shows the page already exists.",
+      "Update an existing CURI Wiki document as its owner or an approved admin. Secret documents require an admin. Use when search_documents shows the page already exists.",
     inputSchema: {
       type: "object",
       properties: {
@@ -234,15 +233,20 @@ export const tools: ToolDefinition[] = [
     requiredScope: "wiki.write",
     handler: async (args, ctx) => {
       const { id_or_slug, ...rest } = args;
+      const editableFields = new Set(['title', 'content_markdown', 'drive_url', 'summary', 'category_slug', 'tags', 'status']);
       const patch = Object.fromEntries(
-        Object.entries(rest).filter(([key, v]) => v !== undefined && (v !== null || key === "drive_url")),
+        Object.entries(rest).filter(([key, v]) => editableFields.has(key) && v !== undefined && (v !== null || key === "drive_url")),
       );
       if (patch.drive_url !== undefined) patch.drive_url = normalizeDriveUrl(patch.drive_url);
       if (!Object.keys(patch).length) throw new ToolError("변경할 필드를 하나 이상 지정하세요.");
       const user = await requireApproved(ctx);
+      const previous = await ctx.store.getDocument(String(id_or_slug));
+      if (!previous) throw new ToolError("수정할 문서를 찾을 수 없습니다.");
+      requireDocumentEditor(user,
+        { owner_id: previous.owner_id, category_id: `cat-${previous.category_slug}` },
+        patch.category_slug === undefined ? undefined : `cat-${patch.category_slug}`,
+      );
       if (typeof patch.content_markdown === "string") {
-        const previous = await ctx.store.getDocument(String(id_or_slug));
-        if (!previous) throw new ToolError("수정할 문서를 찾을 수 없습니다.");
         requireUploadedImages(patch.content_markdown, ctx.baseUrl, previous.content_markdown);
       }
       const doc = await ctx.store.updateDocument(String(id_or_slug), patch, user.id);

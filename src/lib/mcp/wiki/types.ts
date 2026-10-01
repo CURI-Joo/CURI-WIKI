@@ -29,6 +29,7 @@ export interface WikiDocument {
   source_url: string | null;
   drive_url?: string | null;
   author_id: string;
+  owner_id: string | null;
   updated_at?: string;
 }
 

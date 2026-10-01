@@ -35,14 +35,12 @@ export function canReadDocument(
 }
 
 export function canEditDocument(
-  user: Pick<Profile, 'id' | 'role' | 'status'>,
-  doc: Pick<Document, 'owner_id'>,
-  editableDocIds: string[]
+  user: Pick<Profile, 'id' | 'role' | 'status'> | null,
+  doc: { owner_id: string | null; category_id: string }
 ): boolean {
-  if (user.status !== 'approved') return false;
+  if (!user || user.status !== 'approved') return false;
   if (canViewAllDocuments(user)) return true;
-  if (doc.owner_id === user.id) return true;
-  return editableDocIds.includes(doc.owner_id);
+  return doc.owner_id === user.id && !isSecretCategoryId(doc.category_id);
 }
 
 export function canViewAllDocuments(

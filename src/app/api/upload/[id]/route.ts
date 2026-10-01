@@ -3,6 +3,7 @@ import { isDemoMode } from '@/lib/demo-mode';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { imagePreviewKey } from '@/lib/image-preview-server';
+import { canEditDocument } from '@/lib/permissions';
 
 export async function GET(
   _request: NextRequest,
@@ -106,7 +107,7 @@ export async function DELETE(
   const supabaseAdmin = getSupabaseAdmin();
   const { data: attachment, error } = await supabaseAdmin
     .from('attachments')
-    .select('storage_key, uploaded_by')
+    .select('storage_key, uploaded_by, document_id')
     .eq('id', id)
     .single();
 
@@ -114,8 +115,20 @@ export async function DELETE(
     return NextResponse.json({ error: '첨부파일을 찾을 수 없습니다.' }, { status: 404 });
   }
 
-  // 업로더 본인 또는 관리자만 삭제할 수 있습니다.
-  if (attachment.uploaded_by !== user.id && profile.role !== 'admin') {
+  if (attachment.document_id) {
+    const { data: document, error: documentError } = await supabaseAdmin
+      .from('documents')
+      .select('owner_id, category_id')
+      .eq('id', attachment.document_id)
+      .single();
+    if (documentError || !document) {
+      return NextResponse.json({ error: '문서를 찾을 수 없습니다.' }, { status: 404 });
+    }
+    if (!canEditDocument({ ...profile, id: user.id }, document as { owner_id: string; category_id: string })) {
+      return NextResponse.json({ error: '문서 작성자 또는 관리자만 첨부파일을 삭제할 수 있습니다.' }, { status: 403 });
+    }
+  } else if (attachment.uploaded_by !== user.id && profile.role !== 'admin') {
+    // 문서에 연결되지 않은 파일은 업로더 본인 또는 관리자만 삭제합니다.
     return NextResponse.json({ error: '삭제 권한이 없습니다.' }, { status: 403 });
   }
 

@@ -5,7 +5,7 @@ import { NextRequest } from 'next/server';
 const state = vi.hoisted(() => ({
   user: { id: 'u1' } as { id: string } | null,
   profile: { status: 'approved', role: 'member' },
-  document: { category_id: 'cat-company' } as Record<string, unknown> | null,
+  document: { category_id: 'cat-company', owner_id: 'u1' } as Record<string, unknown> | null,
   attachment: null as Record<string, unknown> | null,
   inserted: null as Record<string, unknown> | null,
   lookupError: null as unknown,
@@ -38,7 +38,7 @@ describe('direct video upload', () => {
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-video-signing-key';
     state.user = { id: 'u1' };
     state.profile = { status: 'approved', role: 'member' };
-    state.document = { category_id: 'cat-company' };
+    state.document = { category_id: 'cat-company', owner_id: 'u1' };
     state.attachment = state.inserted = null;
     state.lookupError = null;
     state.sign.mockReset().mockResolvedValue({ data: { signedUrl: 'https://storage.example/upload' } });
@@ -120,5 +120,17 @@ describe('direct video upload', () => {
     state.document = null;
     expect((await call({ action: 'cancel', ticket })).status).toBe(200);
     expect(state.remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires ownership both when preparing and completing a video upload', async () => {
+    state.document!.owner_id = 'other';
+    expect((await call(input)).status).toBe(403);
+    expect(state.sign).not.toHaveBeenCalled();
+    state.document!.owner_id = 'u1';
+    const { ticket } = await (await call(input)).json();
+    state.document!.owner_id = 'other';
+    expect((await call({ action: 'complete', ticket })).status).toBe(403);
+    expect(state.inserted).toBeNull();
+    expect(state.info).not.toHaveBeenCalled();
   });
 });

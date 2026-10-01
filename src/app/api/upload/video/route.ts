@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { readVideoUpload, signVideoUpload, videoStorageKey, videoUploadInput } from '@/lib/video-upload-ticket';
+import { canEditDocument } from '@/lib/permissions';
 
 const fail = (error: string, status: number) => NextResponse.json({ error }, { status });
 
@@ -23,11 +24,13 @@ export async function POST(request: NextRequest) {
   if (body.action === 'init' ? !input?.success : !ticket) return fail('MP4·WebM·MOV 영상(50MB 이하)을 다시 선택해 주세요.', 400);
   const metadata = ticket ?? input!.data!;
 
-  // Recheck the document at completion too: its category may have changed during upload.
+  // Recheck ownership and category at completion: access may have changed during upload.
   if (metadata.document_id && body.action !== 'cancel') {
-    const { data: doc, error } = await admin.from('documents').select('category_id').eq('id', metadata.document_id).single();
+    const { data: doc, error } = await admin.from('documents').select('owner_id, category_id').eq('id', metadata.document_id).single();
     if (error || !doc) return fail('문서를 찾을 수 없습니다.', 404);
-    if ((doc as { category_id: string }).category_id === 'cat-secret' && profile.role !== 'admin') return fail('Secret 문서에는 관리자만 첨부할 수 있습니다.', 403);
+    if (!canEditDocument({ ...profile, id: user.id }, doc as { owner_id: string; category_id: string })) {
+      return fail('문서 작성자 또는 관리자만 영상을 첨부할 수 있습니다.', 403);
+    }
   }
 
   if (body.action === 'init') {

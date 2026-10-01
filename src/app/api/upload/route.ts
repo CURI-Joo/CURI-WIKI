@@ -3,6 +3,7 @@ import { isDemoMode } from '@/lib/demo-mode';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { createImagePreview, imagePreviewKey } from '@/lib/image-preview-server';
+import { canEditDocument } from '@/lib/permissions';
 
 import {
   ALLOWED_TYPES,
@@ -68,16 +69,19 @@ export async function POST(request: NextRequest) {
   const supabaseAdmin = getSupabaseAdmin();
 
   if (documentId) {
-    const { data: documentData } = await supabaseAdmin
+    const { data: documentData, error: documentError } = await supabaseAdmin
       .from('documents')
-      .select('category_id')
+      .select('owner_id, category_id')
       .eq('id', documentId)
       .single();
 
-    const document = documentData as { category_id: string | null } | null;
+    const document = documentData as { owner_id: string; category_id: string } | null;
 
-    if (document?.category_id === 'cat-secret' && profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Secret 문서에는 관리자만 첨부할 수 있습니다.' }, { status: 403 });
+    if (documentError || !document) {
+      return NextResponse.json({ error: '문서를 찾을 수 없습니다.' }, { status: 404 });
+    }
+    if (!canEditDocument({ ...profile, id: user.id }, document)) {
+      return NextResponse.json({ error: '문서 작성자 또는 관리자만 파일을 첨부할 수 있습니다.' }, { status: 403 });
     }
   }
 

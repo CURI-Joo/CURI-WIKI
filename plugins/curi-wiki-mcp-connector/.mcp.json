@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "curi-wiki": {
+      "type": "http",
+      "url": "https://curi-wiki-six.vercel.app/api/mcp"
+    }
+  }
+}

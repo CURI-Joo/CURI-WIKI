@@ -1,0 +1,8 @@
+{
+  "name": "curi-wiki-mcp-connector",
+  "version": "0.1.0",
+  "description": "Read and write CURI Wiki documents through the remote MCP server using browser-based OAuth authentication.",
+  "author": {
+    "name": "Minjoo Suh"
+  }
+}

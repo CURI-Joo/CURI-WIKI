@@ -1,0 +1,16 @@
+{
+  "name": "curi-plugins",
+  "owner": {
+    "name": "Minjoo Suh"
+  },
+  "metadata": {
+    "description": "CURI plugins for connecting Claude to the team's wiki and writing workflows."
+  },
+  "plugins": [
+    {
+      "name": "curi-wiki-mcp-connector",
+      "source": "./plugins/curi-wiki-mcp-connector",
+      "description": "Connect Claude to CURI Wiki with OAuth for document search, writing, updates, and image uploads."
+    }
+  ]
+}
